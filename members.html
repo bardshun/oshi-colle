@@ -11,7 +11,7 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen pb-20 font-sans">
   
-  <!-- 共通ヘッダー -->
+  <!-- タイムテーブル風 共通ヘッダー -->
   <header id="app-header"></header>
 
   <!-- メインコンテンツ -->
@@ -19,16 +19,22 @@
     
     <!-- ナビゲーションタブ -->
     <div class="flex border-b border-slate-800 text-sm font-bold gap-2">
-      <button id="tab-btn-members" onclick="switchTab('members')" class="pb-3 px-4 border-b-2 border-pink-500 text-pink-400 transition">👥 メンバー一覧・追加</button>
-      <button id="tab-btn-groups" onclick="switchTab('groups')" class="pb-3 px-4 border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">🏢 グループ一覧・追加</button>
+      <button id="tab-btn-members" onclick="switchTab('members')" class="pb-3 px-4 border-b-2 border-pink-500 text-pink-400 transition">👥 メンバー一覧</button>
+      <button id="tab-btn-groups" onclick="switchTab('groups')" class="pb-3 px-4 border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">🏢 グループ一覧</button>
       <button id="tab-btn-active" onclick="switchTab('active')" class="pb-3 px-4 border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">👁️ ユーザー表示設定</button>
     </div>
 
-    <!-- TAB 1: メンバー一覧・登録 -->
+    <!-- TAB 1: メンバー一覧 -->
     <section id="tab-content-members" class="space-y-4">
-      <div class="flex justify-between items-center">
-        <h2 class="text-lg font-bold text-slate-200">登録済みメンバー</h2>
-        <button onclick="openMemberModal()" class="bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition shadow-[0_0_12px_rgba(236,72,153,0.4)] flex items-center gap-1">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <!-- 検索・フィルター -->
+        <div class="flex flex-wrap gap-2 text-xs w-full sm:w-auto flex-1">
+          <input type="text" id="search-input" oninput="filterMembers()" placeholder="🔍 メンバー名・グループ名で検索..." class="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-pink-500 flex-1 min-w-[180px]">
+          <select id="group-filter" onchange="filterMembers()" class="bg-slate-900 border border-slate-800 rounded-xl px-2 py-2 focus:outline-none text-slate-300">
+            <option value="">🏢 すべてのグループ</option>
+          </select>
+        </div>
+        <button onclick="openMemberModal()" class="bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition shadow-[0_0_12px_rgba(236,72,153,0.4)] flex items-center gap-1 shrink-0">
           <span>＋</span> メンバー追加
         </button>
       </div>
@@ -38,7 +44,7 @@
       </div>
     </section>
 
-    <!-- TAB 2: グループ一覧・登録 -->
+    <!-- TAB 2: グループ一覧 -->
     <section id="tab-content-groups" class="space-y-4 hidden">
       <div class="flex justify-between items-center">
         <h2 class="text-lg font-bold text-slate-200">登録済みグループ</h2>
@@ -52,75 +58,123 @@
       </div>
     </section>
 
-    <!-- TAB 3: ユーザー表示・非表示管理 -->
+    <!-- TAB 3: ユーザー表示設定 -->
     <section id="tab-content-active" class="space-y-4 hidden">
-      <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-2">
-        <h2 class="text-base font-bold text-pink-400">👁️ プレイ用アクティブ選択</h2>
-        <p class="text-xs text-slate-400">マスタデータから、Tier表や共通点ゲームで使用したいグループ・メンバーのチェックをONにしてください。</p>
+      <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-1">
+        <h2 class="text-base font-bold text-pink-400">👁️️ プレイ用表示設定</h2>
+        <p class="text-xs text-slate-400">Tier表や共通点ゲームで使用したいグループ・メンバーのみチェックを入れてください。</p>
       </div>
 
       <div id="active-management-list" class="space-y-4">
-        <!-- JSでグループごとのチェックリスト生成 -->
+        <!-- JSで生成 -->
       </div>
     </section>
 
   </main>
 
-  <!-- モーダル: メンバー登録・編集 -->
+  <!-- ==================== モーダル1: メンバー登録・編集 (元の高機能フォーム) ==================== -->
   <div id="member-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-800 pb-3">
-        <h3 id="member-modal-title" class="font-bold text-slate-100">メンバー登録</h3>
-        <button onclick="closeMemberModal()" class="text-slate-400 hover:text-white">✕</button>
+        <h3 id="modal-title" class="font-bold text-lg text-pink-400">メンバーを追加</h3>
+        <button onclick="closeMemberModal()" class="text-slate-400 hover:text-white text-xl">✕</button>
       </div>
-      <form id="member-form" onsubmit="saveMember(event)" class="space-y-3">
+
+      <form id="member-form" onsubmit="saveMember(event)" class="space-y-4">
         <input type="hidden" id="member-id">
+
+        <!-- 画像アップロード・プレビュー領域 -->
         <div>
-          <label class="block text-xs text-slate-400 mb-1">メンバー名 *</label>
-          <input type="text" id="member-name" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-pink-500">
+          <label class="block text-xs text-slate-400 mb-1">顔写真 (メイン画像)</label>
+          <div id="paste-area" class="border-2 border-dashed border-slate-700 hover:border-pink-500 rounded-xl p-4 text-center cursor-pointer transition relative bg-slate-950">
+            <img id="image-preview" class="max-h-40 mx-auto rounded-lg mb-2 hidden object-cover" src="" alt="preview">
+            <div id="upload-placeholder" class="space-y-1">
+              <div class="text-2xl">📷</div>
+              <p class="text-xs text-slate-300 font-bold">ファイルをドロップ または 長押しペースト</p>
+              <p class="text-[10px] text-slate-500">クリックしてアルバムから選択</p>
+            </div>
+            <input type="file" id="image-file-input" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer" onchange="handleFileSelect(event)">
+          </div>
+          <button type="button" onclick="pasteFromClipboard()" class="mt-2 w-full text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 py-1.5 rounded-lg border border-slate-700 transition">
+            📋 クリップボードから画像を貼り付け
+          </button>
         </div>
+
+        <!-- 名前 & ふりがな(ruby) -->
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">名前 <span class="text-pink-500">*</span></label>
+            <input type="text" id="member-name" required placeholder="例: さくら" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-pink-500">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">ふりがな</label>
+            <input type="text" id="member-ruby" placeholder="例: さくら" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-pink-500">
+          </div>
+        </div>
+
+        <!-- 所属グループ -->
         <div>
-          <label class="block text-xs text-slate-400 mb-1">所属グループ *</label>
-          <select id="member-group" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-pink-500 text-slate-200">
-            <!-- JSで選択肢挿入 -->
+          <div class="flex justify-between items-center mb-1">
+            <label class="text-xs text-slate-400">所属グループ / 店舗</label>
+            <button type="button" onclick="openGroupModal()" class="text-xs text-pink-400 hover:underline">＋ 新規グループ追加</button>
+          </div>
+          <select id="member-group" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-pink-500 text-slate-200">
+            <option value="">未所属・フリー</option>
           </select>
         </div>
+
+        <!-- 状態 -->
         <div>
-          <label class="block text-xs text-slate-400 mb-1">メンバー画像</label>
-          <input type="file" id="member-image-file" accept="image/*" class="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:bg-slate-800 file:text-pink-400 hover:file:bg-slate-700">
+          <label class="block text-xs text-slate-400 mb-1">状態</label>
+          <div class="flex space-x-4 text-sm">
+            <label class="flex items-center space-x-1 cursor-pointer"><input type="radio" name="member-status" value="active" checked class="accent-pink-500"> <span>現役</span></label>
+            <label class="flex items-center space-x-1 cursor-pointer"><input type="radio" name="member-status" value="graduated" class="accent-pink-500"> <span>卒業 / 離籍</span></label>
+          </div>
         </div>
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="closeMemberModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl font-bold">キャンセル</button>
-          <button type="submit" class="px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white text-xs rounded-xl font-bold">保存する</button>
+
+        <!-- 属性タグ -->
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">属性タグ (カンマ区切り)</label>
+          <input type="text" id="member-tags" placeholder="例: 黒髪, ボブ, ショート" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-pink-500">
+        </div>
+
+        <!-- ボタン類 -->
+        <div class="flex space-x-2 pt-2 border-t border-slate-800">
+          <button type="button" onclick="closeMemberModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 rounded-xl text-sm font-bold transition">キャンセル</button>
+          <button type="submit" id="save-btn" class="flex-1 bg-pink-600 hover:bg-pink-500 text-white font-bold py-2 rounded-xl text-sm transition">保存する</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- モーダル: グループ登録・編集 -->
-  <div id="group-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
-      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
-        <h3 id="group-modal-title" class="font-bold text-slate-100">グループ登録</h3>
-        <button onclick="closeGroupModal()" class="text-slate-400 hover:text-white">✕</button>
+  <!-- ==================== モーダル2: グループ登録・編集 ==================== -->
+  <div id="group-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+        <h3 id="group-modal-title" class="font-bold text-md text-purple-400">グループ / 店舗を追加</h3>
+        <button onclick="closeGroupModal()" class="text-slate-400 hover:text-white text-lg">✕</button>
       </div>
+
       <form id="group-form" onsubmit="saveGroup(event)" class="space-y-3">
         <input type="hidden" id="group-id">
         <div>
-          <label class="block text-xs text-slate-400 mb-1">グループ名 *</label>
-          <input type="text" id="group-name" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-500">
+          <label class="block text-xs text-slate-400 mb-1">名称 <span class="text-pink-500">*</span></label>
+          <input type="text" id="group-name" required placeholder="例: 〇〇少女隊" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-500">
         </div>
+
         <div>
-          <label class="block text-xs text-slate-400 mb-1">拠点（例: 東京都）</label>
-          <input type="text" id="group-location" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-500">
+          <label class="block text-xs text-slate-400 mb-1">拠点都道府県 / エリア</label>
+          <input type="text" id="group-location" placeholder="例: 東京都 秋葉原" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-500">
         </div>
+
         <div>
-          <label class="block text-xs text-slate-400 mb-1">グループ画像（ロゴ/集合写真など）</label>
+          <label class="block text-xs text-slate-400 mb-1">グループ画像（ロゴ / 集合写真）</label>
           <input type="file" id="group-image-file" accept="image/*" class="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:bg-slate-800 file:text-purple-400 hover:file:bg-slate-700">
         </div>
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="closeGroupModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl font-bold">キャンセル</button>
-          <button type="submit" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs rounded-xl font-bold">保存する</button>
+
+        <div class="flex space-x-2 pt-2 border-t border-slate-800">
+          <button type="button" onclick="closeGroupModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 rounded-xl text-xs font-bold">キャンセル</button>
+          <button type="submit" class="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 rounded-xl text-xs">登録・保存</button>
         </div>
       </form>
     </div>
