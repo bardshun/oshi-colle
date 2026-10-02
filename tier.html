@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tier表作成 - 推しコレ</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Supabase JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen pb-20">
+  
+  <!-- 全画面共通ヘッダー -->
+  <header class="bg-gray-800 border-b border-gray-700 p-4 sticky top-0 z-50">
+    <div class="max-w-4xl mx-auto flex justify-between items-center">
+      <div class="flex items-center space-x-3">
+        <a href="index.html" class="text-gray-400 hover:text-white transition">🏠</a>
+        <h1 class="text-xl font-bold text-pink-500">📊 Tier表作成</h1>
+      </div>
+      <div class="flex space-x-2">
+        <button onclick="addTierRow()" class="bg-gray-700 hover:bg-gray-600 text-xs px-3 py-1.5 rounded-lg border border-gray-600 transition">
+          ＋ ランク追加
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- メインコンテンツ -->
+  <main class="max-w-4xl mx-auto p-4 space-y-6">
+    
+    <!-- Tier表メインボード -->
+    <div id="tier-container" class="space-y-2 bg-black/40 p-2 rounded-xl border border-gray-800">
+      <!-- JavaScriptで動的にランク行を生成します -->
+    </div>
+
+    <!-- 未配置メンバーのプールエリア -->
+    <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 space-y-3">
+      <div class="flex justify-between items-center border-b border-gray-700 pb-2">
+        <h3 class="font-bold text-sm text-gray-300">👥 未配置のメンバー</h3>
+        <span id="pool-count" class="text-xs text-gray-400">0名</span>
+      </div>
+
+      <!-- フィルター -->
+      <div class="flex space-x-2 text-xs">
+        <select id="tier-group-filter" onchange="filterPoolMembers()" class="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1 focus:outline-none text-gray-300">
+          <option value="">🏢 すべてのグループ</option>
+        </select>
+      </div>
+
+      <!-- メンバープール（ドラッグ元） -->
+      <div id="member-pool" ondrop="dropToPool(event)" ondragover="allowDrop(event)" 
+           class="min-h-[120px] bg-gray-900/80 p-3 rounded-lg border border-dashed border-gray-700 flex flex-wrap gap-2 items-start">
+        <!-- 未配置カードがここに入ります -->
+      </div>
+    </div>
+
+  </main>
+
+  <!-- スクリプトの読み込み -->
+  <script src="js/common.js"></script>
+  <script src="js/tier.js"></script>
+</body>
+</html>
