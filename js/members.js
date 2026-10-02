@@ -278,39 +278,51 @@ function closeMemberModal() {
   document.getElementById('member-modal').classList.add('hidden');
 }
 
-function openGroupModal(groupId = null) {
+// windowオブジェクトに明示的に登録
+window.openGroupModal = function(groupId = null) {
   groupSelectedFile = null;
   document.getElementById('group-id').value = groupId || '';
   const preview = document.getElementById('group-image-preview');
-  preview.classList.add('hidden');
-  preview.src = '';
-  document.getElementById('group-upload-placeholder').classList.remove('hidden');
+  
+  if (preview) {
+    preview.classList.add('hidden');
+    preview.src = '';
+  }
+  
+  const placeholder = document.getElementById('group-upload-placeholder');
+  if (placeholder) placeholder.classList.remove('hidden');
 
   if (groupId) {
     const g = allGroups.find(x => x.id === groupId);
-    document.getElementById('group-name').value = g.name || '';
-    
-    const locParts = (g.location || '').split(' ');
-    document.getElementById('group-prefecture').value = locParts[0] || '東京都';
-    document.getElementById('group-area-note').value = locParts.slice(1).join(' ') || '';
+    if (g) {
+      document.getElementById('group-name').value = g.name || '';
+      const locParts = (g.location || '').split(' ');
+      document.getElementById('group-prefecture').value = locParts[0] || '東京都';
+      document.getElementById('group-area-note').value = locParts.slice(1).join(' ') || '';
 
-    if (g.image_url) {
-      preview.src = g.image_url;
-      preview.classList.remove('hidden');
-      document.getElementById('group-upload-placeholder').classList.add('hidden');
+      if (g.image_url && preview) {
+        preview.src = g.image_url;
+        preview.classList.remove('hidden');
+        if (placeholder) placeholder.classList.add('hidden');
+      }
     }
-
     document.getElementById('group-modal-title').innerText = 'グループ編集';
   } else {
     document.getElementById('group-form').reset();
     document.getElementById('group-modal-title').innerText = 'グループ / 店舗を追加';
   }
-  document.getElementById('group-modal').classList.remove('hidden');
-}
 
-function closeGroupModal() {
-  document.getElementById('group-modal').classList.add('hidden');
-}
+  // モーダルを表示
+  const modal = document.getElementById('group-modal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex'); // 中央寄せを確実に適用
+};
+
+window.closeGroupModal = function() {
+  const modal = document.getElementById('group-modal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+};
 
 // 7. 保存処理（Supabase）
 async function saveMember(e) {
