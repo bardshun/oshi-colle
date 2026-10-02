@@ -8,6 +8,37 @@ window.supabase = supabaseClient;
 
 console.log('推しコレ: Supabase connected!');
 
+// Google Fonts (Plus Jakarta Sans & Noto Sans JP) の動的読み込み
+if (!document.getElementById('google-fonts-link')) {
+  const link1 = document.createElement('link');
+  link1.rel = 'preconnect';
+  link1.href = 'https://fonts.googleapis.com';
+  
+  const link2 = document.createElement('link');
+  link2.rel = 'preconnect';
+  link2.href = 'https://fonts.gstatic.com';
+  link2.crossOrigin = 'anonymous';
+
+  const fontLink = document.createElement('link');
+  fontLink.id = 'google-fonts-link';
+  fontLink.rel = 'stylesheet';
+  fontLink.href = 'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&family=Plus+Jakarta+Sans:ital,wght@0,600;0,800;1,800&display=swap';
+
+  document.head.appendChild(link1);
+  document.head.appendChild(link2);
+  document.head.appendChild(fontLink);
+
+  // 全体フォント適用スタイル
+  const style = document.createElement('style');
+  style.innerHTML = `
+    body {
+      font-family: 'Plus Jakarta Sans', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif !important;
+      letter-spacing: -0.01em;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 // タイムテーブルアプリ風 共通ヘッダーの自動生成
 document.addEventListener('DOMContentLoaded', () => {
   const headerContainer = document.getElementById('app-header');
