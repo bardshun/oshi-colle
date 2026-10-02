@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>好きな顔共通点 - 推しコレ</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Supabase JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen pb-20">
+  
+  <!-- 全画面共通ヘッダー -->
+  <header class="bg-gray-800 border-b border-gray-700 p-4 sticky top-0 z-50">
+    <div class="max-w-4xl mx-auto flex justify-between items-center">
+      <div class="flex items-center space-x-3">
+        <a href="index.html" class="text-gray-400 hover:text-white transition">🏠</a>
+        <h1 class="text-xl font-bold text-pink-500">🤝 好きな顔共通点</h1>
+      </div>
+      <button onclick="resetGame()" class="text-xs text-gray-400 hover:text-white border border-gray-600 px-2.5 py-1 rounded-lg">
+        最初からやり直す
+      </button>
+    </div>
+  </header>
+
+  <!-- メインコンテンツ -->
+  <main class="max-w-2xl mx-auto p-4 space-y-6">
+    
+    <!-- PHASE 1: ユーザー名入力画面 -->
+    <div id="setup-screen" class="bg-gray-800 p-6 rounded-2xl border border-gray-700 space-y-5 text-center">
+      <div class="space-y-1">
+        <h2 class="text-xl font-bold text-pink-400">参加者の名前を入力</h2>
+        <p class="text-xs text-gray-400">3人で遊ぶモードです。ニックネームを入力してください！</p>
+      </div>
+
+      <div class="space-y-3 max-w-sm mx-auto text-left">
+        <div>
+          <label class="block text-xs text-pink-400 font-bold mb-1">ユーザー A</label>
+          <input type="text" id="user-a-name" value="プレイヤーA" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-pink-500">
+        </div>
+        <div>
+          <label class="block text-xs text-blue-400 font-bold mb-1">ユーザー B</label>
+          <input type="text" id="user-b-name" value="プレイヤーB" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-pink-500">
+        </div>
+        <div>
+          <label class="block text-xs text-emerald-400 font-bold mb-1">ユーザー C</label>
+          <input type="text" id="user-c-name" value="プレイヤーC" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-pink-500">
+        </div>
+      </div>
+
+      <button onclick="startGame()" class="w-full max-w-sm bg-pink-600 hover:bg-pink-500 text-white font-bold py-3 rounded-xl transition text-sm shadow-lg">
+        ゲームスタート 🚀
+      </button>
+    </div>
+
+    <!-- PHASE 2: 3人同時タップ画面 (初期は非表示) -->
+    <div id="game-screen" class="space-y-4 hidden">
+      <!-- 進捗メーター -->
+      <div class="flex justify-between items-center text-xs text-gray-400">
+        <span id="progress-text">1 / 10 名目</span>
+        <span id="match-count-badge" class="bg-pink-900/60 text-pink-300 border border-pink-700/50 px-2 py-0.5 rounded-full text-[10px]">共通点: 0名</span>
+      </div>
+
+      <!-- メインメンバーカード -->
+      <div class="bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden shadow-2xl flex flex-col items-center p-4 space-y-3">
+        <div class="w-full max-w-xs aspect-square bg-gray-900 rounded-xl overflow-hidden border border-gray-700 shadow-inner">
+          <img id="current-member-img" src="" alt="member" class="w-full h-full object-cover">
+        </div>
+        <div class="text-center">
+          <div id="current-group-name" class="text-xs text-pink-400 font-bold">グループ名</div>
+          <div id="current-member-name" class="text-xl font-black text-white">メンバー名</div>
+          <div id="current-member-tags" class="flex flex-wrap justify-center gap-1 mt-1"></div>
+        </div>
+      </div>
+
+      <!-- 3人選択ボタンエリア -->
+      <div class="bg-gray-800 p-4 rounded-2xl border border-gray-700 space-y-3">
+        <p class="text-center text-xs text-gray-400 font-bold">直感で「好きな顔」をタップ！</p>
+        
+        <div class="grid grid-cols-3 gap-2">
+          <!-- ユーザーA ボタン -->
+          <button id="btn-user-a" onclick="toggleLike('A')" class="p-3 rounded-xl border-2 border-pink-500/30 bg-gray-900/80 hover:bg-pink-950/30 transition flex flex-col items-center justify-center space-y-1">
+            <span class="text-xl">🤍</span>
+            <span id="label-user-a" class="text-xs font-bold text-pink-400 truncate w-full text-center">Aさん</span>
+          </button>
+
+          <!-- ユーザーB ボタン -->
+          <button id="btn-user-b" onclick="toggleLike('B')" class="p-3 rounded-xl border-2 border-blue-500/30 bg-gray-900/80 hover:bg-blue-950/30 transition flex flex-col items-center justify-center space-y-1">
+            <span class="text-xl">🤍</span>
+            <span id="label-user-b" class="text-xs font-bold text-blue-400 truncate w-full text-center">Bさん</span>
+          </button>
+
+          <!-- ユーザーC ボタン -->
+          <button id="btn-user-c" onclick="toggleLike('C')" class="p-3 rounded-xl border-2 border-emerald-500/30 bg-gray-900/80 hover:bg-emerald-950/30 transition flex flex-col items-center justify-center space-y-1">
+            <span class="text-xl">🤍</span>
+            <span id="label-user-c" class="text-xs font-bold text-emerald-400 truncate w-full text-center">Cさん</span>
+          </button>
+        </div>
+
+        <button onclick="nextMember()" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-xl transition text-sm flex items-center justify-center space-x-2 border border-gray-600 mt-2">
+          <span>次の顔へ</span>
+          <span>➔</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- PHASE 3: 結果画面 (初期は非表示) -->
+    <div id="result-screen" class="bg-gray-800 p-6 rounded-2xl border border-gray-700 space-y-6 hidden">
+      <div class="text-center space-y-1 border-b border-gray-700 pb-4">
+        <h2 class="text-2xl font-black text-pink-400">🎉 マッチング結果</h2>
+        <p class="text-xs text-gray-400">3人の「好きな顔」の共通点一覧です！</p>
+      </div>
+
+      <!-- 🏆 3人全員の好きな顔（奇跡の共通点） -->
+      <div class="space-y-3">
+        <h3 class="font-bold text-sm text-yellow-400 flex items-center space-x-1">
+          <span>👑 3人全員が「好き」な顔</span>
+        </h3>
+        <div id="result-all-match" class="grid grid-cols-3 sm:grid-cols-4 gap-2">
+          <!-- JSでカード挿入 -->
+        </div>
+      </div>
+
+      <!-- 👥 2人の共通点 -->
+      <div class="space-y-3 border-t border-gray-700/50 pt-4">
+        <h3 class="font-bold text-sm text-pink-300 flex items-center space-x-1">
+          <span>🤝 2人の共通点</span>
+        </h3>
+        <div id="result-two-match" class="space-y-2 text-xs">
+          <!-- JSでカード挿入 -->
+        </div>
+      </div>
+
+      <button onclick="resetGame()" class="w-full bg-pink-600 hover:bg-pink-500 text-white font-bold py-3 rounded-xl transition text-sm">
+        もう一度あそぶ 🔄
+      </button>
+    </div>
+
+  </main>
+
+  <!-- スクリプトの読み込み -->
+  <script src="js/common.js"></script>
+  <script src="js/match.js"></script>
+</body>
+</html>
