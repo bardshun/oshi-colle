@@ -1,6 +1,7 @@
 let allMembers = [];
 let allGroups = [];
-let currentSelectedFile = null;
+let memberSelectedFile = null;
+let groupSelectedFile = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   setupPasteHandler();
@@ -19,7 +20,6 @@ async function loadGroups() {
   const { data } = await supabase.from('groups').select('*').order('name');
   allGroups = data || [];
   
-  // モーダルとフィルターのセレクトボックス更新
   const selectModal = document.getElementById('member-group');
   const selectFilter = document.getElementById('group-filter');
   
@@ -41,7 +41,7 @@ async function loadMembers() {
   allMembers = data || [];
 }
 
-// 2. メンバーカードの描画 & フィルター
+// 2. メンバー描画 & フィルター
 function renderMembers(filteredList = null) {
   const container = document.getElementById('members-list');
   const list = filteredList || allMembers;
@@ -167,32 +167,54 @@ async function toggleMemberActive(memberId, isActive) {
   if (m) m.is_active = isActive;
 }
 
-// 5. 画像プレビュー＆クリップボード貼り付け処理
-function handleFileSelect(e) {
+// 5. 画像プレビュー＆ペースト処理（メンバー / グループ両対応）
+function handleMemberFileSelect(e) {
   const file = e.target.files[0];
-  if (file) setPreviewFile(file);
+  if (file) setPreviewFile(file, 'member');
 }
 
-function setPreviewFile(file) {
-  currentSelectedFile = file;
+function handleGroupFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) setPreviewFile(file, 'group');
+}
+
+function setPreviewFile(file, target) {
   const reader = new FileReader();
   reader.onload = (e) => {
-    const preview = document.getElementById('image-preview');
-    preview.src = e.target.result;
-    preview.classList.remove('hidden');
-    document.getElementById('upload-placeholder').classList.add('hidden');
+    if (target === 'member') {
+      memberSelectedFile = file;
+      const preview = document.getElementById('image-preview');
+      preview.src = e.target.result;
+      preview.classList.remove('hidden');
+      document.getElementById('upload-placeholder').classList.add('hidden');
+    } else {
+      groupSelectedFile = file;
+      const preview = document.getElementById('group-image-preview');
+      preview.src = e.target.result;
+      preview.classList.remove('hidden');
+      document.getElementById('group-upload-placeholder').classList.add('hidden');
+    }
   };
   reader.readAsDataURL(file);
 }
 
-async function pasteFromClipboard() {
+async function pasteFromClipboard(target = null) {
+  // target未指定の場合は、開いているモーダルを自動特定
+  if (!target) {
+    if (!document.getElementById('group-modal').classList.contains('hidden')) {
+      target = 'group';
+    } else {
+      target = 'member';
+    }
+  }
+
   try {
     const items = await navigator.clipboard.read();
     for (const item of items) {
       const type = item.types.find(t => t.startsWith('image/'));
       if (type) {
         const blob = await item.getType(type);
-        setPreviewFile(new File([blob], "pasted_image.png", { type }));
+        setPreviewFile(new File([blob], "pasted_image.png", { type }), target);
         return;
       }
     }
@@ -209,15 +231,18 @@ function setupPasteHandler() {
     for (const item of items) {
       if (item.type.indexOf('image') !== -1) {
         const blob = item.getAsFile();
-        if (blob) setPreviewFile(blob);
+        if (blob) {
+          const target = !document.getElementById('group-modal').classList.contains('hidden') ? 'group' : 'member';
+          setPreviewFile(blob, target);
+        }
       }
     }
   });
 }
 
-// 6. モーダル制御（メンバー / グループ）
+// 6. モーダル制御
 function openMemberModal(memberId = null) {
-  currentSelectedFile = null;
+  memberSelectedFile = null;
   document.getElementById('member-id').value = memberId || '';
   const preview = document.getElementById('image-preview');
   preview.classList.add('hidden');
@@ -231,11 +256,9 @@ function openMemberModal(memberId = null) {
     document.getElementById('member-group').value = m.group_id || '';
     document.getElementById('member-tags').value = (m.tags || []).join(', ');
     
-    // 状態ラジオ
     const radios = document.getElementsByName('member-status');
     radios.forEach(r => r.checked = (r.value === (m.status || 'active')));
 
-    // 画像セット
     const defaultImg = m.member_images?.find(i => i.is_default) || m.member_images?.[0];
     if (defaultImg) {
       preview.src = defaultImg.image_url;
@@ -256,15 +279,31 @@ function closeMemberModal() {
 }
 
 function openGroupModal(groupId = null) {
+  groupSelectedFile = null;
   document.getElementById('group-id').value = groupId || '';
+  const preview = document.getElementById('group-image-preview');
+  preview.classList.add('hidden');
+  preview.src = '';
+  document.getElementById('group-upload-placeholder').classList.remove('hidden');
+
   if (groupId) {
     const g = allGroups.find(x => x.id === groupId);
     document.getElementById('group-name').value = g.name || '';
-    document.getElementById('group-location').value = g.location || '';
+    
+    const locParts = (g.location || '').split(' ');
+    document.getElementById('group-prefecture').value = locParts[0] || '東京都';
+    document.getElementById('group-area-note').value = locParts.slice(1).join(' ') || '';
+
+    if (g.image_url) {
+      preview.src = g.image_url;
+      preview.classList.remove('hidden');
+      document.getElementById('group-upload-placeholder').classList.add('hidden');
+    }
+
     document.getElementById('group-modal-title').innerText = 'グループ編集';
   } else {
     document.getElementById('group-form').reset();
-    document.getElementById('group-modal-title').innerText = 'グループ追加';
+    document.getElementById('group-modal-title').innerText = 'グループ / 店舗を追加';
   }
   document.getElementById('group-modal').classList.remove('hidden');
 }
@@ -298,10 +337,9 @@ async function saveMember(e) {
     memberData = data;
   }
 
-  // 画像アップロード処理
-  if (currentSelectedFile && memberData) {
+  if (memberSelectedFile && memberData) {
     const filePath = `members/${memberData.id}_${Date.now()}`;
-    const { data: uploadData } = await supabase.storage.from('member-images').upload(filePath, currentSelectedFile);
+    const { data: uploadData } = await supabase.storage.from('member-images').upload(filePath, memberSelectedFile);
 
     if (uploadData) {
       const { data: urlData } = supabase.storage.from('member-images').getPublicUrl(filePath);
@@ -317,14 +355,14 @@ async function saveGroup(e) {
   e.preventDefault();
   const id = document.getElementById('group-id').value;
   const name = document.getElementById('group-name').value;
-  const location = document.getElementById('group-location').value;
-  const fileInput = document.getElementById('group-image-file');
+  const pref = document.getElementById('group-prefecture').value;
+  const areaNote = document.getElementById('group-area-note').value;
+  const location = areaNote ? `${pref} ${areaNote}` : pref;
 
   let imageUrl = null;
-  if (fileInput.files.length > 0) {
-    const file = fileInput.files[0];
-    const filePath = `groups/${Date.now()}_${file.name}`;
-    const { data: uploadData } = await supabase.storage.from('member-images').upload(filePath, file);
+  if (groupSelectedFile) {
+    const filePath = `groups/${Date.now()}_${groupSelectedFile.name}`;
+    const { data: uploadData } = await supabase.storage.from('member-images').upload(filePath, groupSelectedFile);
     if (uploadData) {
       const { data: urlData } = supabase.storage.from('member-images').getPublicUrl(filePath);
       imageUrl = urlData.publicUrl;
