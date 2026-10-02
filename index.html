@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>推しコレ - OSHI-COLLE</title>
-  <!-- Tailwind CSS (デザイン用) -->
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Supabase JS SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-gray-900 text-white min-h-screen">
+<body class="bg-gray-900 text-white min-h-screen pb-10">
   
   <!-- 全画面共通ヘッダー -->
   <header class="bg-gray-800 border-b border-gray-700 p-4 sticky top-0 z-50">
@@ -20,35 +20,72 @@
   </header>
 
   <!-- メインコンテンツエリア -->
-  <main class="max-w-4xl mx-auto p-4 space-y-4">
-    <div class="text-center py-6">
-      <h2 class="text-2xl font-bold mb-2">推しコレ - OSHI-COLLE</h2>
+  <main class="max-w-4xl mx-auto p-4 space-y-6">
+    <div class="text-center py-4">
+      <h2 class="text-2xl font-bold mb-1">推しコレ - OSHI-COLLE</h2>
       <p class="text-gray-400 text-sm">〜 オタク友達と語る好きな顔アプリ 〜</p>
     </div>
 
-    <!-- メニューカード -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <a href="members.html" class="bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-pink-500 transition block">
-        <div class="text-3xl mb-2">👥</div>
-        <h3 class="font-bold text-lg mb-1">メンバー管理</h3>
-        <p class="text-xs text-gray-400">メンバー・写真の登録、タグ付けや画像の選択</p>
-      </a>
+    <!-- タブ切り替えボタン -->
+    <div class="flex border-b border-gray-700">
+      <button id="tab-app-btn" onclick="switchTab('app')" class="flex-1 py-3 text-center font-bold border-b-2 border-pink-500 text-pink-500 transition">
+        🎮 アプリ
+      </button>
+      <button id="tab-manage-btn" onclick="switchTab('manage')" class="flex-1 py-3 text-center font-bold border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition">
+        ⚙️ 管理
+      </button>
+    </div>
 
+    <!-- ① アプリ タブコンテンツ -->
+    <div id="tab-app" class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <a href="tier.html" class="bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-pink-500 transition block">
         <div class="text-3xl mb-2">📊</div>
         <h3 class="font-bold text-lg mb-1">Tier表作成</h3>
-        <p class="text-xs text-gray-400">ドラッグ＆ドロップで自分だけのTier表を作成・保存</p>
+        <p class="text-xs text-gray-400">ドラッグ＆ドロップで自分だけの好きな顔Tier表を作成・保存</p>
       </a>
 
       <a href="match.html" class="bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-pink-500 transition block">
         <div class="text-3xl mb-2">🤝</div>
         <h3 class="font-bold text-lg mb-1">好きな顔共通点</h3>
-        <p class="text-xs text-gray-400">3人で遊ぶ！全員の好きな顔・共通点をマッチング</p>
+        <p class="text-xs text-gray-400">3人で遊ぶ！全員の好きな顔や個人の癖（ヘキ）をチェック</p>
+      </a>
+    </div>
+
+    <!-- ② 管理 タブコンテンツ (初期状態は非表示) -->
+    <div id="tab-manage" class="grid grid-cols-1 md:grid-cols-2 gap-4 hidden">
+      <a href="members.html" class="bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-pink-500 transition block">
+        <div class="text-3xl mb-2">👥</div>
+        <h3 class="font-bold text-lg mb-1">メンバー＆グループ管理</h3>
+        <p class="text-xs text-gray-400">メンバー・写真の登録、グループ/店舗マスターの登録・変更</p>
       </a>
     </div>
   </main>
 
-  <!-- 共通スクリプトの読み込み -->
+  <!-- タブ切り替え用JavaScript -->
+  <script>
+    function switchTab(tabName) {
+      const appTab = document.getElementById('tab-app');
+      const manageTab = document.getElementById('tab-manage');
+      const appBtn = document.getElementById('tab-app-btn');
+      const manageBtn = document.getElementById('tab-manage-btn');
+
+      if (tabName === 'app') {
+        appTab.classList.remove('hidden');
+        manageTab.classList.add('hidden');
+        
+        appBtn.className = "flex-1 py-3 text-center font-bold border-b-2 border-pink-500 text-pink-500 transition";
+        manageBtn.className = "flex-1 py-3 text-center font-bold border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition";
+      } else {
+        appTab.classList.add('hidden');
+        manageTab.classList.remove('hidden');
+
+        manageBtn.className = "flex-1 py-3 text-center font-bold border-b-2 border-pink-500 text-pink-500 transition";
+        appBtn.className = "flex-1 py-3 text-center font-bold border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition";
+      }
+    }
+  </script>
+
+  <!-- 共通スクリプト -->
   <script src="js/common.js"></script>
 </body>
 </html>
