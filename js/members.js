@@ -1,261 +1,170 @@
-let currentMembers = [];
-let currentGroups = [];
-let selectedImageFile = null;
+let allMembers = [];
+let allGroups = [];
 
-// ページ読み込み時の初期化
-document.addEventListener('DOMContentLoaded', () => {
-  loadGroups();
-  loadMembers();
-  setupPasteEvent();
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadAllData();
 });
 
-// 1. グループ一覧読み込み
+async function loadAllData() {
+  await Promise.all([loadGroups(), loadMembers()]);
+  renderMembers();
+  renderGroups();
+  renderActiveManagement();
+}
+
+// 1. Supabaseデータ取得
 async function loadGroups() {
-  const { data, error } = await supabase.from('groups').select('*').order('name');
-  if (error) {
-    console.error('グループ取得失敗:', error);
-    return;
+  const { data } = await supabase.from('groups').select('*').order('name');
+  allGroups = data || [];
+  
+  // モーダルのセレクトボックス更新
+  const select = document.getElementById('member-group');
+  if (select) {
+    select.innerHTML = allGroups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
   }
-  currentGroups = data || [];
-
-  // ドロップダウン＆フィルターの更新
-  const memberGroupSelect = document.getElementById('member-group');
-  const groupFilterSelect = document.getElementById('group-filter');
-
-  memberGroupSelect.innerHTML = '<option value="">未所属・フリー</option>';
-  groupFilterSelect.innerHTML = '<option value="">🏢 すべてのグループ/店舗</option>';
-
-  currentGroups.forEach(g => {
-    const prefText = g.prefecture ? ` (${g.prefecture})` : '';
-    memberGroupSelect.innerHTML += `<option value="${g.id}">${g.name}${prefText}</option>`;
-    groupFilterSelect.innerHTML += `<option value="${g.id}">${g.name}${prefText}</option>`;
-  });
 }
 
-// 2. メンバー一覧読み込み
 async function loadMembers() {
-  const memberGrid = document.getElementById('member-grid');
-  memberGrid.innerHTML = '<div class="col-span-full text-center py-10 text-gray-500">読み込み中...</div>';
-
-  // メンバー情報 ＋ グループ情報 ＋ メイン画像を結合取得
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from('members')
-    .select(`
-      *,
-      groups ( name, prefecture ),
-      member_images ( id, image_url, is_default )
-    `)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('メンバー取得失敗:', error);
-    memberGrid.innerHTML = '<div class="col-span-full text-center py-10 text-red-400">データの読み込みに失敗しました</div>';
-    return;
-  }
-
-  currentMembers = data || [];
-  renderMembers(currentMembers);
+    .select(`*, groups(name), member_images(image_url, is_default)`)
+    .order('name');
+  allMembers = data || [];
 }
 
-// 3. メンバーカードの描画
-function renderMembers(members) {
-  const memberGrid = document.getElementById('member-grid');
-  if (members.length === 0) {
-    memberGrid.innerHTML = '<div class="col-span-full text-center py-10 text-gray-500">メンバーが登録されていません</div>';
+// 2. メンバー描画＆編集
+function renderMembers() {
+  const container = document.getElementById('members-list');
+  if (allMembers.length === 0) {
+    container.innerHTML = '<div class="col-span-full text-center py-8 text-xs text-slate-500">メンバーが登録されていません</div>';
     return;
   }
 
-  memberGrid.innerHTML = members.map(m => {
-    // 表示画像（デフォルト指定画像、無ければ最初の画像、無ければプレースホルダー）
+  container.innerHTML = allMembers.map(m => {
     const defaultImg = m.member_images?.find(i => i.is_default) || m.member_images?.[0];
-    const imgUrl = defaultImg ? defaultImg.image_url : 'https://via.placeholder.com/200x200?text=No+Image';
-
-    const groupName = m.groups ? m.groups.name : '未所属';
-    const statusBadge = m.status === 'graduated' ? '<span class="text-[10px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded">卒業</span>' : '';
-    const tagsHtml = (m.tags || []).map(t => `<span class="bg-gray-700 text-pink-300 text-[10px] px-1.5 py-0.5 rounded">#${t}</span>`).join(' ');
-
+    const imgUrl = defaultImg ? defaultImg.image_url : 'https://via.placeholder.com/150?text=No+Img';
     return `
-      <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden flex flex-col hover:border-gray-500 transition">
-        <div class="aspect-square bg-gray-900 relative overflow-hidden">
-          <img src="${imgUrl}" alt="${m.name}" class="w-full h-full object-cover">
-          ${statusBadge ? `<div class="absolute top-2 left-2">${statusBadge}</div>` : ''}
-        </div>
-        <div class="p-3 flex-1 flex flex-col justify-between space-y-2">
-          <div>
-            <div class="text-xs text-pink-400 font-bold truncate">${groupName}</div>
-            <div class="font-bold text-sm text-white truncate">${m.name}</div>
-            <div class="flex flex-wrap gap-1 mt-1">${tagsHtml}</div>
-          </div>
-          <button onclick="openEditMemberModal(${m.id})" class="w-full text-xs bg-gray-700 hover:bg-gray-600 py-1 rounded text-gray-300 transition">
-            編集
+      <div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-lg group hover:border-pink-500/50 transition">
+        <div class="aspect-square bg-slate-950 relative overflow-hidden">
+          <img src="${imgUrl}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+          <button onclick="openMemberModal(${m.id})" class="absolute top-2 right-2 bg-slate-950/80 hover:bg-pink-600 text-white text-[10px] px-2 py-1 rounded-lg border border-slate-700 backdrop-blur-sm transition">
+            ✏️ 編集
           </button>
+        </div>
+        <div class="p-3">
+          <div class="text-[10px] text-pink-400 font-bold truncate">${m.groups ? m.groups.name : '未所属'}</div>
+          <div class="font-extrabold text-sm text-slate-100 truncate">${m.name}</div>
         </div>
       </div>
     `;
   }).join('');
 }
 
-// 4. リアルタイム絞り込みフィルター
-function filterMembers() {
-  const search = document.getElementById('search-input').value.toLowerCase();
-  const groupVal = document.getElementById('group-filter').value;
-  const statusVal = document.getElementById('status-filter').value;
-
-  const filtered = currentMembers.filter(m => {
-    const matchName = m.name.toLowerCase().includes(search) || (m.ruby && m.ruby.toLowerCase().includes(search));
-    const matchGroup = !groupVal || String(m.group_id) === groupVal;
-    const matchStatus = !statusVal || m.status === statusVal;
-    return matchName && matchGroup && matchStatus;
-  });
-
-  renderMembers(filtered);
-}
-
-// 5. 画像選択・ペースト処理
-function handleFileSelect(event) {
-  const file = event.target.files[0];
-  if (file) setPreviewImage(file);
-}
-
-function setPreviewImage(file) {
-  selectedImageFile = file;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const imgEl = document.getElementById('image-preview');
-    imgEl.src = e.target.result;
-    imgEl.classList.remove('hidden');
-    document.getElementById('upload-placeholder').classList.add('hidden');
-  };
-  reader.readAsDataURL(file);
-}
-
-// クリップボードからの貼り付け（長押し/Ctrl+Vイベント）
-function setupPasteEvent() {
-  window.addEventListener('paste', (e) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-
-    for (let item of items) {
-      if (item.type.indexOf('image') !== -1) {
-        const file = item.getAsFile();
-        setPreviewImage(file);
-        break;
-      }
-    }
-  });
-}
-
-// クリップボード読み込みボタン（ワンタップ用）
-async function pasteFromClipboard() {
-  try {
-    const clipboardItems = await navigator.clipboard.read();
-    for (const item of clipboardItems) {
-      const imageType = item.types.find(type => type.startsWith('image/'));
-      if (imageType) {
-        const blob = await item.getType(imageType);
-        const file = new File([blob], 'pasted_image.png', { type: imageType });
-        setPreviewImage(file);
-        alert('クリップボードから画像を読み込みました！');
-        return;
-      }
-    }
-    alert('クリップボードに画像が見つかりませんでした。');
-  } catch (err) {
-    alert('クリップボードの読み取り権限がないか、長押しペーストをご利用ください。');
-  }
-}
-
-// 6. メンバー保存処理（Supabase DB + Storage）
-async function saveMember(e) {
-  e.preventDefault();
-  const saveBtn = document.getElementById('save-btn');
-  saveBtn.disabled = true;
-  saveBtn.innerText = '保存中...';
-
-  const memberId = document.getElementById('member-id').value;
-  const name = document.getElementById('member-name').value;
-  const ruby = document.getElementById('member-ruby').value;
-  const groupId = document.getElementById('member-group').value || null;
-  const status = document.querySelector('input[name="member-status"]:checked').value;
-  const tagsText = document.getElementById('member-tags').value;
-  const tags = tagsText ? tagsText.split(',').map(t => t.trim()).filter(Boolean) : [];
-
-  try {
-    let savedMemberId = memberId;
-
-    if (memberId) {
-      // 更新
-      await supabase.from('members').update({ name, ruby, group_id: groupId, status, tags }).eq('id', memberId);
-    } else {
-      // 新規追加
-      const { data, error } = await supabase.from('members').insert([{ name, ruby, group_id: groupId, status, tags }]).select();
-      if (error) throw error;
-      savedMemberId = data[0].id;
-    }
-
-    // 画像のアップロード処理（画像が選択されている場合）
-    if (selectedImageFile && savedMemberId) {
-      const fileExt = selectedImageFile.name.split('.').pop() || 'png';
-      const fileName = `${savedMemberId}_${Date.now()}.${fileExt}`;
-
-      // Storageへアップロード
-      const { error: uploadError } = await supabase.storage
-        .from('member-images')
-        .upload(fileName, selectedImageFile);
-
-      if (uploadError) throw uploadError;
-
-      // 公開URLの取得
-      const { data: urlData } = supabase.storage.from('member-images').getPublicUrl(fileName);
-
-      // member_images テーブルへ保存
-      await supabase.from('member_images').insert([{
-        member_id: savedMemberId,
-        image_url: urlData.publicUrl,
-        is_default: true
-      }]);
-    }
-
-    closeMemberModal();
-    loadMembers();
-  } catch (err) {
-    console.error('保存エラー:', err);
-    alert('保存に失敗しました: ' + err.message);
-  } finally {
-    saveBtn.disabled = false;
-    saveBtn.innerText = '保存する';
-  }
-}
-
-// 7. グループ新規保存処理
-async function saveGroup(e) {
-  e.preventDefault();
-  const name = document.getElementById('group-name').value;
-  const category = document.getElementById('group-category').value;
-  const prefecture = document.getElementById('group-prefecture').value;
-  const areaNote = document.getElementById('group-area-note').value;
-
-  const { data, error } = await supabase.from('groups').insert([{ name, category, prefecture, area_note: areaNote }]).select();
-  if (error) {
-    alert('グループ追加失敗: ' + error.message);
+// 3. グループ描画＆編集
+function renderGroups() {
+  const container = document.getElementById('groups-list');
+  if (allGroups.length === 0) {
+    container.innerHTML = '<div class="col-span-full text-center py-8 text-xs text-slate-500">グループが登録されていません</div>';
     return;
   }
 
-  closeGroupModal();
-  await loadGroups();
-  if (data && data[0]) {
-    document.getElementById('member-group').value = data[0].id; // 追加したグループを自動選択
-  }
+  container.innerHTML = allGroups.map(g => {
+    const imgUrl = g.image_url || 'https://via.placeholder.com/300x150?text=Group+Image';
+    const memberCount = allMembers.filter(m => m.group_id === g.id).length;
+    return `
+      <div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-lg hover:border-purple-500/50 transition">
+        <div class="h-28 bg-slate-950 relative">
+          <img src="${imgUrl}" class="w-full h-full object-cover">
+          <button onclick="openGroupModal(${g.id})" class="absolute top-2 right-2 bg-slate-950/80 hover:bg-purple-600 text-white text-[10px] px-2 py-1 rounded-lg border border-slate-700 backdrop-blur-sm transition">
+            ✏️ 編集
+          </button>
+        </div>
+        <div class="p-3 flex justify-between items-center">
+          <div>
+            <div class="font-extrabold text-sm text-slate-100">${g.name}</div>
+            <div class="text-[10px] text-slate-400">${g.location || '拠点未設定'}</div>
+          </div>
+          <span class="text-xs bg-purple-950/60 text-purple-300 border border-purple-800/50 px-2 py-0.5 rounded-full font-bold">
+            ${memberCount}名
+          </span>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
-// モーダル開閉系関数
-function openMemberModal() {
-  document.getElementById('member-form').reset();
-  document.getElementById('member-id').value = '';
-  document.getElementById('modal-title').innerText = 'メンバーを追加';
-  document.getElementById('image-preview').classList.add('hidden');
-  document.getElementById('upload-placeholder').classList.remove('hidden');
-  selectedImageFile = null;
+// 4. 表示/非表示（アクティブ選択）一覧描画
+function renderActiveManagement() {
+  const container = document.getElementById('active-management-list');
+  if (allGroups.length === 0) {
+    container.innerHTML = '<div class="text-center py-8 text-xs text-slate-500">グループを登録すると表示設定が可能になります</div>';
+    return;
+  }
+
+  container.innerHTML = allGroups.map(g => {
+    const groupMembers = allMembers.filter(m => m.group_id === g.id);
+    const membersHtml = groupMembers.map(m => `
+      <label class="flex items-center space-x-2 p-2 bg-slate-950/60 rounded-xl border border-slate-800/60 cursor-pointer hover:border-slate-700 transition">
+        <input type="checkbox" ${m.is_active !== false ? 'checked' : ''} onchange="toggleMemberActive(${m.id}, this.checked)" class="accent-pink-500 rounded">
+        <span class="text-xs font-bold text-slate-200 truncate">${m.name}</span>
+      </label>
+    `).join('');
+
+    return `
+      <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+          <label class="flex items-center space-x-2 cursor-pointer">
+            <input type="checkbox" ${g.is_active !== false ? 'checked' : ''} onchange="toggleGroupActive(${g.id}, this.checked)" class="accent-purple-500 rounded">
+            <span class="font-black text-sm text-purple-400">${g.name}</span>
+          </label>
+          <span class="text-[10px] text-slate-500">${groupMembers.length}名</span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+          ${membersHtml || '<div class="col-span-full text-[10px] text-slate-600">メンバー未登録</div>'}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// 5. ON/OFFトグル関数
+async function toggleGroupActive(groupId, isActive) {
+  await supabase.from('groups').update({ is_active: isActive }).eq('id', groupId);
+  const g = allGroups.find(x => x.id === groupId);
+  if (g) g.is_active = isActive;
+}
+
+async function toggleMemberActive(memberId, isActive) {
+  await supabase.from('members').update({ is_active: isActive }).eq('id', memberId);
+  const m = allMembers.find(x => x.id === memberId);
+  if (m) m.is_active = isActive;
+}
+
+// 6. タブ切り替え
+function switchTab(tab) {
+  ['members', 'groups', 'active'].forEach(t => {
+    document.getElementById(`tab-content-${t}`).classList.add('hidden');
+    const btn = document.getElementById(`tab-btn-${t}`);
+    btn.className = "pb-3 px-4 border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition";
+  });
+
+  document.getElementById(`tab-content-${tab}`).classList.remove('hidden');
+  const activeBtn = document.getElementById(`tab-btn-${tab}`);
+  activeBtn.className = "pb-3 px-4 border-b-2 border-pink-500 text-pink-400 transition font-bold";
+}
+
+// 7. モーダル＆保存処理（メンバー / グループ）
+function openMemberModal(memberId = null) {
+  document.getElementById('member-id').value = memberId || '';
+  if (memberId) {
+    const m = allMembers.find(x => x.id === memberId);
+    document.getElementById('member-name').value = m.name;
+    document.getElementById('member-group').value = m.group_id;
+    document.getElementById('member-modal-title').innerText = 'メンバー編集';
+  } else {
+    document.getElementById('member-form').reset();
+    document.getElementById('member-modal-title').innerText = 'メンバー登録';
+  }
   document.getElementById('member-modal').classList.remove('hidden');
 }
 
@@ -263,11 +172,81 @@ function closeMemberModal() {
   document.getElementById('member-modal').classList.add('hidden');
 }
 
-function openGroupModal() {
-  document.getElementById('group-form').reset();
+function openGroupModal(groupId = null) {
+  document.getElementById('group-id').value = groupId || '';
+  if (groupId) {
+    const g = allGroups.find(x => x.id === groupId);
+    document.getElementById('group-name').value = g.name;
+    document.getElementById('group-location').value = g.location || '';
+    document.getElementById('group-modal-title').innerText = 'グループ編集';
+  } else {
+    document.getElementById('group-form').reset();
+    document.getElementById('group-modal-title').innerText = 'グループ登録';
+  }
   document.getElementById('group-modal').classList.remove('hidden');
 }
 
-function closeGroupModal() {
-  document.getElementById('group-modal').classList.add('hidden');
+closeGroupModal = () => document.getElementById('group-modal').classList.add('hidden');
+
+// 保存処理（Supabase）
+async function saveMember(e) {
+  e.preventDefault();
+  const id = document.getElementById('member-id').value;
+  const name = document.getElementById('member-name').value;
+  const group_id = document.getElementById('member-group').value;
+  const fileInput = document.getElementById('member-image-file');
+
+  let memberData;
+  if (id) {
+    const { data } = await supabase.from('members').update({ name, group_id }).eq('id', id).select().single();
+    memberData = data;
+  } else {
+    const { data } = await supabase.from('members').insert([{ name, group_id }]).select().single();
+    memberData = data;
+  }
+
+  // 画像のアップロード
+  if (fileInput.files.length > 0 && memberData) {
+    const file = fileInput.files[0];
+    const filePath = `members/${memberData.id}_${Date.now()}`;
+    const { data: uploadData } = await supabase.storage.from('member-images').upload(filePath, file);
+
+    if (uploadData) {
+      const { data: urlData } = supabase.storage.from('member-images').getPublicUrl(filePath);
+      await supabase.from('member_images').insert([{ member_id: memberData.id, image_url: urlData.publicUrl, is_default: true }]);
+    }
+  }
+
+  closeMemberModal();
+  await loadAllData();
+}
+
+async function saveGroup(e) {
+  e.preventDefault();
+  const id = document.getElementById('group-id').value;
+  const name = document.getElementById('group-name').value;
+  const location = document.getElementById('group-location').value;
+  const fileInput = document.getElementById('group-image-file');
+
+  let imageUrl = null;
+  if (fileInput.files.length > 0) {
+    const file = fileInput.files[0];
+    const filePath = `groups/${Date.now()}_${file.name}`;
+    const { data: uploadData } = await supabase.storage.from('member-images').upload(filePath, file);
+    if (uploadData) {
+      const { data: urlData } = supabase.storage.from('member-images').getPublicUrl(filePath);
+      imageUrl = urlData.publicUrl;
+    }
+  }
+
+  if (id) {
+    const updateObj = { name, location };
+    if (imageUrl) updateObj.image_url = imageUrl;
+    await supabase.from('groups').update(updateObj).eq('id', id);
+  } else {
+    await supabase.from('groups').insert([{ name, location, image_url: imageUrl }]);
+  }
+
+  closeGroupModal();
+  await loadAllData();
 }
