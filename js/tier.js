@@ -64,8 +64,11 @@ async function loadTierMembers() {
   console.log('データの読み込みを開始します...');
 
   try {
-    // members と groups を同時に並行取得
-    const [membersRes, groupsRes] = await Promise.all([
+    // ログインユーザー情報の取得
+    const user = (await supabase.auth.getUser())?.data?.user;
+
+    // 💡 members, groups, user_member_settings を並行取得
+    const [membersRes, groupsRes, settingsRes] = await Promise.all([
       supabase
         .from('members')
         .select(`*, groups(id, name, prefecture, category), member_images(image_url, is_default)`)
@@ -73,19 +76,32 @@ async function loadTierMembers() {
       supabase
         .from('groups')
         .select(`*`)
-        .order('name')
+        .order('name'),
+      // ログイン済みの場合のみ設定テーブルを取得（未ログイン時は null）
+      user 
+        ? supabase.from('user_member_settings').select('member_id, is_hidden').eq('user_id', user.id)
+        : Promise.resolve({ data: [] })
     ]);
 
     if (membersRes.error) console.error('メンバー取得エラー:', membersRes.error);
     if (groupsRes.error) console.error('グループ取得エラー:', groupsRes.error);
+    if (settingsRes.error) console.error('表示設定取得エラー:', settingsRes.error);
 
-    // グローバル変数へ格納
-    allMembers = membersRes.data || [];
+    const rawMembers = membersRes.data || [];
     allGroups = groupsRes.data || [];
 
-    console.log(`取得完了: メンバー ${allMembers.length}件 / グループ ${allGroups.length}件`);
+    // 💡 非表示設定（is_hidden）を Map 化
+    const settingsMap = new Map((settingsRes.data || []).map(s => [String(s.member_id), s.is_hidden]));
 
-    // 💡 取得完了後にフィルターの選択肢（拠点・グループ・区分）を初期化
+    // 💡 is_hidden が true のメンバーを最初から除外して allMembers に格納
+    allMembers = rawMembers.filter(m => {
+      const isHidden = settingsMap.get(String(m.id)) ?? false;
+      return !isHidden; // 表示対象（is_hidden === false）のみ残す
+    });
+
+    console.log(`取得完了: メンバー ${allMembers.length}件（非表示除外済）/ グループ ${allGroups.length}件`);
+
+    // 取得完了後にフィルターの選択肢（拠点・グループ・区分）を初期化
     setupTierFilters(allMembers, allGroups);
 
     // プールエリアの描画

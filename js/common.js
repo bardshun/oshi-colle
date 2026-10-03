@@ -52,25 +52,85 @@ document.addEventListener('DOMContentLoaded', () => {
     { name: '🤝 共通点', path: 'match.html' },
   ];
 
-  const navHtml = navItems.map(item => {
+  // PC用ナビHTML
+  const desktopNavHtml = navItems.map(item => {
     const isActive = currentPath === item.path;
     const activeClass = isActive 
       ? 'bg-pink-600/20 text-pink-400 border-pink-500/50 font-bold shadow-[0_0_10px_rgba(236,72,153,0.3)]' 
       : 'text-gray-400 hover:text-white hover:bg-slate-800/60 border-transparent';
-    return `<a href="${item.path}" class="px-3 py-1.5 rounded-xl border text-xs sm:text-sm transition-all flex items-center gap-1 ${activeClass}">${item.name}</a>`;
+    return `<a href="${item.path}" class="px-3 py-1.5 rounded-xl border text-xs sm:text-sm transition-all flex items-center gap-1 whitespace-nowrap ${activeClass}">${item.name}</a>`;
   }).join('');
 
-  headerContainer.className = "sticky top-0 z-50 bg-slate-950/80 backdrop-blur-md border-b border-slate-800/80 px-4 py-3";
+  // スマホ用ドロップダウンメニューHTML
+  const mobileNavHtml = navItems.map(item => {
+    const isActive = currentPath === item.path;
+    const activeClass = isActive 
+      ? 'bg-pink-600/20 text-pink-400 font-bold border-l-4 border-pink-500' 
+      : 'text-gray-300 hover:bg-slate-800/80';
+    return `<a href="${item.path}" class="block px-4 py-3 text-sm transition ${activeClass}">${item.name}</a>`;
+  }).join('');
+
+  headerContainer.className = "sticky top-0 z-[100] bg-slate-950/80 backdrop-blur-md border-b border-slate-800/80 px-4 py-3";
   headerContainer.innerHTML = `
-    <div class="max-w-5xl mx-auto flex items-center justify-between">
-      <a href="index.html" class="flex items-center space-x-2 group">
-        <span class="text-xl font-black bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-400 bg-clip-text text-transparent group-hover:opacity-80 transition">推しコレ</span>
+    <div class="max-w-5xl mx-auto flex items-center justify-between relative">
+      <!-- 💡 タイトルエリア（whitespace-nowrap & shrink-0 で改行を強力防止） -->
+      <a href="index.html" class="flex items-center space-x-2 group shrink-0">
+        <span class="text-xl font-black bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-400 bg-clip-text text-transparent group-hover:opacity-80 transition whitespace-nowrap">推しコレ</span>
       </a>
-      <nav class="flex space-x-1 sm:space-x-2">
-        ${navHtml}
+
+      <!-- 💡 PC表示用ナビ（md以上で表示） -->
+      <nav class="hidden md:flex space-x-2">
+        ${desktopNavHtml}
       </nav>
+
+      <!-- 💡 スマホ表示用ハンバーガーボタン（md未満で表示） -->
+      <button id="mobile-menu-btn" class="md:hidden p-2 text-slate-300 hover:text-white hover:bg-slate-800/60 rounded-xl transition focus:outline-none" aria-label="メニューを開く">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path id="menu-icon-open" class="block" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+          <path id="menu-icon-close" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+
+      <!-- 💡 スマホ用ドロップダウンメニュー本体 -->
+      <div id="mobile-menu" class="hidden absolute top-full right-0 left-0 mt-2 bg-slate-900/95 border border-slate-800 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden z-50 md:hidden transition-all">
+        <nav class="py-2 divide-y divide-slate-800/50">
+          ${mobileNavHtml}
+        </nav>
+      </div>
     </div>
   `;
+
+  // ハンバーガーメニューの開閉イベント設定
+  const menuBtn = document.getElementById('mobile-menu-btn');
+  const mobileMenu = document.getElementById('mobile-menu');
+  const iconOpen = document.getElementById('menu-icon-open');
+  const iconClose = document.getElementById('menu-icon-close');
+
+  if (menuBtn && mobileMenu) {
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = !mobileMenu.classList.contains('hidden');
+      
+      if (isOpen) {
+        mobileMenu.classList.add('hidden');
+        iconOpen.classList.remove('hidden');
+        iconClose.classList.add('hidden');
+      } else {
+        mobileMenu.classList.remove('hidden');
+        iconOpen.classList.add('hidden');
+        iconClose.classList.remove('hidden');
+      }
+    });
+
+    // 画面外クリックでメニューを閉じる
+    document.addEventListener('click', (e) => {
+      if (!mobileMenu.contains(e.target) && !menuBtn.contains(e.target)) {
+        mobileMenu.classList.add('hidden');
+        iconOpen?.classList.remove('hidden');
+        iconClose?.classList.add('hidden');
+      }
+    });
+  }
 });
 
 // ==========================================
