@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>推しコレ - 好きな顔9選</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="js/common.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans pb-12">
+
+  <!-- 共通ヘッダー -->
+  <header id="app-header"></header>
+
+  <main class="max-w-3xl mx-auto px-4 py-6 space-y-6">
+    <!-- 💡 ページタイトル（ヘッダー下） -->
+    <div class="text-center space-y-1">
+      <h1 class="text-2xl sm:text-3xl font-black bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-400 bg-clip-text text-transparent inline-block">
+        ✨ 好きな顔9選
+      </h1>
+      <p class="text-xs text-slate-400">予選・本選・2択勝負であなたの「最高の顔9選」を決定！</p>
+    </div>
+
+    <!-- 💡 PHASE 0: 開始＆条件絞り込み画面 -->
+    <section id="phase-setup" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center space-y-5 shadow-xl">
+      <div>
+        <h2 class="text-xl font-bold text-pink-400">好きな顔9選を作ろう！</h2>
+        <p class="text-xs text-slate-400 mt-1">9名ずつ表示される中から直感で選んで「顔9選」を決定します。</p>
+      </div>
+
+      <!-- 絞り込み設定 -->
+      <div class="space-y-4 max-w-sm mx-auto text-left">
+        <div class="space-y-1.5">
+          <div class="flex justify-between items-center">
+            <span class="text-xs text-slate-300 font-bold">拠点（エリア）</span>
+            <div class="space-x-2 text-[10px]">
+              <button type="button" onclick="toggleAllCheckboxes('filter-prefecture-list', true)" class="text-pink-400 hover:underline">すべて選択</button>
+              <button type="button" onclick="toggleAllCheckboxes('filter-prefecture-list', false)" class="text-slate-400 hover:underline">解除</button>
+            </div>
+          </div>
+          <div id="filter-prefecture-list" class="bg-slate-950 border border-slate-800 rounded-lg p-2.5 max-h-28 overflow-y-auto space-y-1 text-xs text-slate-300"></div>
+        </div>
+
+        <div class="space-y-1.5">
+          <div class="flex justify-between items-center">
+            <span class="text-xs text-slate-300 font-bold">区分（カテゴリ）</span>
+            <div class="space-x-2 text-[10px]">
+              <button type="button" onclick="toggleAllCheckboxes('filter-category-list', true)" class="text-pink-400 hover:underline">すべて選択</button>
+              <button type="button" onclick="toggleAllCheckboxes('filter-category-list', false)" class="text-slate-400 hover:underline">解除</button>
+            </div>
+          </div>
+          <div id="filter-category-list" class="bg-slate-950 border border-slate-800 rounded-lg p-2.5 max-h-28 overflow-y-auto space-y-1 text-xs text-slate-300"></div>
+        </div>
+      </div>
+
+      <button onclick="startNineSelect()" class="w-full max-w-sm bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-bold py-3 rounded-xl transition text-sm shadow-lg">
+        予選をスタートする 🚀
+      </button>
+    </section>
+
+    <!-- 💡 PHASE 1: 予選（9名ずつ選択） -->
+    <section id="phase-qualifying" class="hidden space-y-4">
+      <div class="flex justify-between items-center bg-slate-900/90 border border-slate-800 p-4 rounded-xl sticky top-16 z-40 backdrop-blur">
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="text-xs font-bold text-pink-400">STEP 1 / 3: 予選</span>
+            <span id="qualifying-page-indicator" class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full"></span>
+          </div>
+          <h2 class="text-xs sm:text-sm font-bold text-white mt-0.5">「好みの顔」をタップして選択！</h2>
+        </div>
+        <div class="text-right">
+          <span class="text-[10px] text-slate-400">選択中</span>
+          <div class="text-sm font-bold text-pink-400"><span id="qualifying-count">0</span> 名</div>
+        </div>
+      </div>
+
+      <div id="qualifying-grid" class="grid grid-cols-3 gap-3"></div>
+
+      <button id="qualifying-next-btn" onclick="handleQualifyingNext()" class="w-full bg-pink-600 hover:bg-pink-500 text-white font-bold py-3 rounded-xl transition text-sm shadow-lg">
+        次へ
+      </button>
+    </section>
+
+    <!-- 💡 PHASE 2: 本選（予選通過者から9名ずつ厳選） -->
+    <section id="phase-main" class="hidden space-y-4">
+      <div class="flex justify-between items-center bg-slate-900/90 border border-slate-800 p-4 rounded-xl sticky top-16 z-40 backdrop-blur">
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="text-xs font-bold text-purple-400">STEP 2 / 3: 本選</span>
+            <span id="main-page-indicator" class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full"></span>
+          </div>
+          <h2 class="text-xs sm:text-sm font-bold text-white mt-0.5">予選通過者から「特に推せる顔」を厳選！</h2>
+        </div>
+        <div class="text-right">
+          <span class="text-[10px] text-slate-400">選択中</span>
+          <div class="text-sm font-bold text-purple-400"><span id="main-count">0</span> 名</div>
+        </div>
+      </div>
+
+      <div id="main-grid" class="grid grid-cols-3 gap-3"></div>
+
+      <button id="main-next-btn" onclick="handleMainNext()" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-xl transition text-sm shadow-lg">
+        次へ
+      </button>
+    </section>
+
+    <!-- 💡 PHASE 3: 決戦（2択比較） -->
+    <section id="phase-match" class="hidden space-y-6 text-center">
+      <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+        <span class="text-xs font-bold text-indigo-400">STEP 3 / 3: 決戦（2択勝負）</span>
+        <h2 class="text-sm font-bold text-white mt-1">好きな顔の方をタップしてください！</h2>
+        <p class="text-[11px] text-slate-400 mt-1">残りマッチ数: <span id="match-remaining" class="text-pink-400 font-bold">0</span></p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 max-w-md mx-auto">
+        <!-- 選択肢 A -->
+        <button id="match-btn-a" onclick="selectMatchWinner('A')" class="group bg-slate-900 border-2 border-slate-800 hover:border-pink-500 rounded-2xl p-3 transition flex flex-col items-center space-y-2">
+          <div class="w-full aspect-square rounded-xl overflow-hidden bg-slate-950">
+            <img id="match-img-a" src="" class="w-full h-full object-cover group-hover:scale-105 transition">
+          </div>
+          <span id="match-name-a" class="text-xs font-bold text-slate-200 truncate w-full"></span>
+        </button>
+
+        <!-- 選択肢 B -->
+        <button id="match-btn-b" onclick="selectMatchWinner('B')" class="group bg-slate-900 border-2 border-slate-800 hover:border-pink-500 rounded-2xl p-3 transition flex flex-col items-center space-y-2">
+          <div class="w-full aspect-square rounded-xl overflow-hidden bg-slate-950">
+            <img id="match-img-b" src="" class="w-full h-full object-cover group-hover:scale-105 transition">
+          </div>
+          <span id="match-name-b" class="text-xs font-bold text-slate-200 truncate w-full"></span>
+        </button>
+      </div>
+    </section>
+
+    <!-- 💡 PHASE 4: 結果発表 -->
+    <section id="phase-result" class="hidden space-y-6">
+      <div class="text-center space-y-1">
+        <h2 class="text-2xl font-black bg-gradient-to-r from-pink-500 via-purple-400 to-indigo-400 bg-clip-text text-transparent inline-block">
+          💖 好きな顔9選 完成！
+        </h2>
+        <p class="text-xs text-slate-400">あなたが選んだ「最高の9人」です！</p>
+      </div>
+
+      <div id="result-capture-area" class="bg-slate-950 border border-slate-800 rounded-2xl p-4 max-w-md mx-auto space-y-3 shadow-2xl">
+        <h3 class="text-center text-xs font-bold text-pink-400 tracking-wider">MY FAVORITE FACES 9</h3>
+        <div id="result-grid" class="grid grid-cols-3 gap-2"></div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row justify-center gap-3 max-w-xs mx-auto">
+        <button onclick="downloadNineSelectImage()" class="bg-pink-600 hover:bg-pink-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition shadow flex items-center justify-center space-x-1.5">
+          <span>📷 画像として保存</span>
+        </button>
+        <button onclick="location.reload()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 px-4 rounded-xl text-xs transition">
+          🔄 もう一度遊ぶ
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="js/nine_select.js"></script>
+</body>
+</html>

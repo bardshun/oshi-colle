@@ -115,6 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
     { name: '👥 メンバー・グループ', path: 'members.html' },
     { name: '📊 Tier表', path: 'tier.html' },
     { name: '🤝 共通点', path: 'match.html' },
+    { name: '✨ 好きな顔9選', path: 'nine_select.html' },
   ];
 
   // PC用ナビHTML
