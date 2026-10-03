@@ -83,9 +83,9 @@
         </div>
       </div>
 
-      <!-- プレビューキャプチャ対象エリア -->
-      <div class="p-4 overflow-y-auto bg-gray-950 flex-1 flex justify-center items-start">
-        <div id="tier-export-target" class="w-full bg-gray-900 p-4 rounded-xl border border-gray-800 space-y-2">
+      <!-- プレビューキャプチャ対象エリア (全体横スクロール対応) -->
+      <div class="p-4 overflow-auto bg-gray-950 flex-1 flex justify-start items-start">
+        <div id="tier-export-target" class="w-max min-w-[950px] bg-gray-900 p-4 rounded-xl border border-gray-800 space-y-2 shadow-2xl">
           <!-- JavaScriptで出力用Tier表全体をレンダリング -->
         </div>
       </div>

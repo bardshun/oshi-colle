@@ -116,7 +116,7 @@ function renderPool() {
   poolEl.innerHTML = wallCardHtml + memberCardsHtml;
 }
 
-// メンバーカードHTML生成（タップ選択・強調対応）
+// メンバーカードHTML生成（画像サイズ維持＆高さ自動調整による見切れ完全防止版）
 function createMemberCardHtml(m) {
   const defaultImg = m.member_images?.find(i => i.is_default) || m.member_images?.[0];
   const imgUrl = defaultImg ? defaultImg.image_url : 'https://via.placeholder.com/100?text=No+Img';
@@ -126,10 +126,15 @@ function createMemberCardHtml(m) {
     <div id="card-${m.id}" draggable="true" 
          ondragstart="dragStart(event, '${m.id}')" 
          onclick="handleCardClick(event, '${m.id}')"
-         class="w-16 h-20 sm:w-20 sm:h-24 bg-gray-800 rounded-lg overflow-hidden border ${isSelected ? 'border-pink-500 ring-4 ring-pink-500/80 scale-105 z-10 shadow-lg shadow-pink-500/30' : 'border-gray-700'} cursor-pointer hover:border-pink-500 flex flex-col flex-shrink-0 select-none shadow transition duration-150">
-      <img src="${imgUrl}" alt="${m.name}" class="w-full h-12 sm:h-16 object-cover pointer-events-none">
-      <div class="p-0.5 bg-gray-800 flex-1 flex items-center justify-center">
-        <span class="text-[10px] text-gray-200 font-bold truncate text-center px-0.5 pointer-events-none">${m.name}</span>
+         class="w-16 sm:w-20 h-auto bg-gray-800 rounded-lg overflow-hidden border ${isSelected ? 'border-2 border-pink-500 ring-4 ring-pink-500/80 scale-105 z-10 shadow-lg shadow-pink-500/30' : 'border-gray-700'} cursor-pointer hover:border-pink-500 flex flex-col flex-shrink-0 select-none shadow transition duration-150">
+      <!-- 1. 画像エリア（元のサイズに固定） -->
+      <img src="${imgUrl}" alt="${m.name}" class="w-full h-12 sm:h-16 object-cover pointer-events-none block shrink-0">
+      
+      <!-- 2. 名前エリア（上下パディングをしっかり取り、文字が収まる高さを確保） -->
+      <div class="px-0.5 py-1.5 bg-gray-800 flex items-center justify-center shrink-0">
+        <span class="text-[9px] sm:text-[10px] text-gray-200 font-bold truncate text-center block w-full pointer-events-none leading-tight">
+          ${m.name}
+        </span>
       </div>
     </div>
   `;
@@ -272,7 +277,8 @@ function filterPoolMembers() {
   renderPool();
 }
 
-// 7. Tier表 全体プレビュー ＆ 画像保存処理 (横スクロール＆1行10固定対応版)
+// 7. Tier表 全体プレビュー ＆ 画像保存処理 (横スクロール対応・カード10個分確保版)
+// 7. Tier表 全体プレビュー ＆ 画像保存処理 (全体一体化 ＆ 横長一括スクロール版)
 window.openTierPreviewModal = function() {
   console.log('Tier表プレビューモーダルを開きます');
   const exportTarget = document.getElementById('tier-export-target');
@@ -281,26 +287,29 @@ window.openTierPreviewModal = function() {
     return;
   }
 
-  // ドロップゾーンから現在のカード・壁のノードをクローンして綺麗に描画
+  // 💡 外枠自体が最小950pxまで綺麗に拡大するスタイル
+  exportTarget.className = "w-max min-w-[950px] bg-gray-900 p-4 rounded-xl border border-gray-800 space-y-2 shadow-2xl";
+
+  // ドロップゾーンから現在のカード・壁のノードをクローンして描画
   exportTarget.innerHTML = `
     <div class="text-center pb-2 mb-3 border-b border-gray-800">
       <h2 class="text-xl font-black text-pink-500 tracking-wider">OFFICIAL TIER LIST</h2>
     </div>
-    <div class="space-y-2">
+    <div class="space-y-2 w-full">
       ${defaultTiers.map(tier => {
         const dropZone = document.getElementById(`drop-${tier.id}`);
         const clonedChildrenHtml = dropZone ? dropZone.innerHTML : '';
 
         return `
-          <div class="flex items-stretch bg-gray-950 border border-gray-800 rounded-lg overflow-hidden min-h-[80px]">
-            <!-- ランクヘッダー (左端固定) -->
-            <div class="w-20 sm:w-24 flex items-center justify-center font-black text-xl sm:text-2xl border-r border-gray-800 shrink-0 text-center p-2 select-none sticky left-0 z-10"
+          <div class="flex items-stretch bg-gray-950 border border-gray-800 rounded-lg overflow-hidden min-h-[85px] w-full">
+            <!-- ランクヘッダー -->
+            <div class="w-20 sm:w-24 flex items-center justify-center font-black text-xl sm:text-2xl border-r border-gray-800 shrink-0 text-center p-2 select-none"
                  style="background-color: ${tier.color}; color:${tier.textColor};">
               ${tier.name}
             </div>
 
-            <!-- ドロップエリア (折り返しなし・1行で10個分以上の最小幅確保・単体横スクロール) -->
-            <div class="flex-1 p-2 flex flex-nowrap items-center gap-2 bg-gray-900/80 overflow-x-auto min-w-[800px] custom-scrollbar">
+            <!-- ドロップエリア (1行固定表示) -->
+            <div class="flex-1 p-2 flex flex-nowrap items-center gap-2 bg-gray-900/80">
               ${clonedChildrenHtml || '<span class="text-xs text-gray-600 pl-2">なし</span>'}
             </div>
           </div>
@@ -322,25 +331,70 @@ window.closeTierPreviewModal = function() {
 };
 
 // html2canvasによる高画質PNG画像出力処理
+// 8. Tier表 画像ダウンロード処理 (html2canvasのテキスト描画バグ自動補正版)
 window.downloadTierImage = async function() {
-  const target = document.getElementById('tier-export-target');
-  if (!target) return;
+  const exportTarget = document.getElementById('tier-export-target');
+  if (!exportTarget) {
+    alert('保存対象エリアが見つかりません');
+    return;
+  }
 
-  console.log('Tier表画像の生成を開始します...');
+  const saveBtn = document.getElementById('save-image-btn');
+  const originalText = saveBtn ? saveBtn.innerText : '';
+  if (saveBtn) {
+    saveBtn.innerText = '⏳ 画像生成中...';
+    saveBtn.disabled = true;
+  }
+
   try {
-    const canvas = await html2canvas(target, {
-      backgroundColor: '#111827', // bg-gray-900
-      scale: 2 // 高解像度化
+    // 1. 画像の読み込み完了を待機
+    const images = Array.from(exportTarget.querySelectorAll('img'));
+    await Promise.all(
+      images.map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise((resolve) => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        });
+      })
+    );
+
+    // 2. html2canvas の実行 (onclone でテキストの下部見切れを自動補正)
+    const canvas = await html2canvas(exportTarget, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#0f172a',
+      logging: false,
+      onclone: (clonedDoc) => {
+        // 画像化用のクローン内にある名前表示用 span 要素だけを取得
+        const cardTexts = clonedDoc.querySelectorAll('#tier-export-target span');
+        cardTexts.forEach(el => {
+          // html2canvas のテキスト上ズレバグを解消するため、キャプチャ時のみ少し下に押し下げる・余白を確保
+          el.style.display = 'inline-block';
+          el.style.transform = 'translateY(1px)'; // 1px下に補正
+          el.style.lineHeight = '1.3';             // 行高に少し余裕を持たせる
+        });
+      }
     });
 
+    // 3. ダウンロード処理
+    const imageUri = canvas.toDataURL('image/png');
     const link = document.createElement('a');
-    link.download = `tier-list_${new Date().toISOString().slice(0, 10)}.png`;
-    link.href = canvas.toDataURL('image/png');
+    link.download = `tier-list_${new Date().toISOString().split('T')[0]}.png`;
+    link.href = imageUri;
+    document.body.appendChild(link);
     link.click();
-    console.log('Tier表画像のダウンロードが完了しました');
+    document.body.removeChild(link);
+
   } catch (err) {
-    console.error('画像生成エラー:', err);
-    alert('画像の保存に失敗しました: ' + (err.message || 'エラーが発生しました'));
+    console.error('画像保存エラー:', err);
+    alert('画像の保存に失敗しました。');
+  } finally {
+    if (saveBtn) {
+      saveBtn.innerText = originalText;
+      saveBtn.disabled = false;
+    }
   }
 };
 
