@@ -45,47 +45,61 @@
 
     <!-- 未配置メンバーのプールエリア (下半部: 比率4 / 内部スクロール) -->
     <div class="flex-[4] min-h-0 bg-gray-800 p-3 rounded-xl border border-gray-700 flex flex-col overflow-hidden space-y-2 shadow-lg">
+      
+      <!-- ヘッダー＆アコーディオン開閉ボタン -->
       <div class="flex justify-between items-center border-b border-gray-700 pb-1.5 shrink-0">
-        <h3 class="font-bold text-xs sm:text-sm text-gray-300">👥 未配置のメンバー</h3>
-        <span id="pool-count" class="text-[10px] sm:text-xs text-gray-400">0名</span>
+        <div class="flex items-center gap-2">
+          <h3 class="font-bold text-xs sm:text-sm text-gray-300">👥 未配置のメンバー</h3>
+          <span id="pool-count" class="text-[10px] sm:text-xs text-gray-400">0名</span>
+        </div>
+
+        <!-- アコーディオン開閉トグルボタン -->
+        <button id="toggle-filter-btn" onclick="toggleFilterAccordion()" class="text-[11px] bg-gray-900 hover:bg-gray-700 border border-gray-700 text-gray-300 px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition">
+          <span>🔍 絞り込み・並び替え</span>
+          <span id="filter-status-badge" class="hidden w-2 h-2 rounded-full bg-pink-500"></span>
+          <span id="accordion-arrow" class="text-[9px] text-gray-400">▼</span>
+        </button>
       </div>
 
-      <!-- フィルター＆ソート（拠点・グループ・区分＋ソートボタン） -->
-      <div class="flex flex-wrap items-center justify-between gap-1.5 text-xs shrink-0">
-        <div class="flex flex-wrap gap-1.5">
-          <!-- 拠点 -->
-          <select id="tier-branch-filter" onchange="handleBranchChange()" class="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1 focus:outline-none text-gray-300 text-[11px]">
-            <option value="">🌐 すべての拠点</option>
-          </select>
+      <!-- アコーディオンコンテンツ (初期状態は hidden で折りたたみ) -->
+      <div id="filter-accordion-content" class="hidden flex flex-col space-y-1.5 pt-1 border-b border-gray-700/60 pb-2 shrink-0 transition-all duration-200">
+        <div class="flex flex-wrap items-center justify-between gap-1.5 text-xs">
+          <!-- フィルター群 -->
+          <div class="flex flex-wrap gap-1.5">
+            <!-- 拠点 -->
+            <select id="tier-branch-filter" onchange="handleBranchChange()" class="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1 focus:outline-none text-gray-300 text-[11px]">
+              <option value="">🌐 すべての拠点</option>
+            </select>
 
-          <!-- グループ -->
-          <select id="tier-group-filter" onchange="filterPoolMembers()" class="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1 focus:outline-none text-gray-300 text-[11px]">
-            <option value="">🏢 すべてのグループ</option>
-          </select>
+            <!-- グループ -->
+            <select id="tier-group-filter" onchange="filterPoolMembers()" class="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1 focus:outline-none text-gray-300 text-[11px]">
+              <option value="">🏢 すべてのグループ</option>
+            </select>
 
-          <!-- 区分 -->
-          <select id="tier-category-filter" onchange="filterPoolMembers()" class="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1 focus:outline-none text-gray-300 text-[11px]">
-            <option value="">🏷️ すべての区分</option>
-          </select>
+            <!-- 区分 -->
+            <select id="tier-category-filter" onchange="filterPoolMembers()" class="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1 focus:outline-none text-gray-300 text-[11px]">
+              <option value="">🏷️ すべての区分</option>
+            </select>
+          </div>
+
+          <!-- ソート群 -->
+          <div class="flex gap-1">
+            <button id="sort-ruby-btn" onclick="toggleSort('ruby')" class="bg-gray-900 hover:bg-gray-700 border border-gray-700 text-gray-300 px-2 py-1 rounded-lg text-[11px] flex items-center gap-1 transition">
+              🔤 名前 <span id="sort-ruby-icon">▼</span>
+            </button>
+            <button id="sort-group-btn" onclick="toggleSort('group')" class="bg-gray-900 hover:bg-gray-700 border border-gray-700 text-gray-300 px-2 py-1 rounded-lg text-[11px] flex items-center gap-1 transition">
+              🏢 グループ <span id="sort-group-icon">▼</span>
+            </button>
+          </div>
         </div>
+      </div>
 
-        <!-- ソート切替ボタン -->
-        <div class="flex gap-1">
-          <button id="sort-ruby-btn" onclick="toggleSort('ruby')" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 px-2 py-1 rounded-lg text-[11px] flex items-center gap-1 transition">
-            🔤 名前 <span id="sort-ruby-icon">▼</span>
-          </button>
-          <button id="sort-group-btn" onclick="toggleSort('group')" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 px-2 py-1 rounded-lg text-[11px] flex items-center gap-1 transition">
-            🏢 グループ <span id="sort-group-icon">▼</span>
-          </button>
-        </div>
-</div>
-
-      <!-- メンバープール（ドラッグ元・タップ選択元 / タップで未配置に戻すための onclick を追加） -->
+      <!-- メンバープールエリア -->
       <div id="member-pool" 
-           onclick="handlePoolClick(event)"
-           ondrop="dropToPool(event)" 
-           ondragover="allowDrop(event)" 
-           class="flex-1 overflow-y-auto bg-gray-900/80 p-2 rounded-lg border border-dashed border-gray-700 flex flex-wrap gap-2 items-start custom-scrollbar">
+          onclick="handlePoolClick(event)"
+          ondrop="dropToPool(event)" 
+          ondragover="allowDrop(event)" 
+          class="flex-1 overflow-y-auto bg-gray-900/80 p-2 rounded-lg border border-dashed border-gray-700 flex flex-wrap gap-2 items-start custom-scrollbar">
         <!-- 未配置カードが入ります -->
       </div>
     </div>

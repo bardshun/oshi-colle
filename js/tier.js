@@ -394,7 +394,52 @@ function restoreCardPositions() {
   updateCardHighlightStyles();
 }
 
+/**
+ * フィルター・ソート領域のアコーディオン開閉トグル
+ */
+window.toggleFilterAccordion = function() {
+  const content = document.getElementById('filter-accordion-content');
+  const arrow = document.getElementById('accordion-arrow');
+  const btn = document.getElementById('toggle-filter-btn');
+
+  if (!content) return;
+
+  const isHidden = content.classList.contains('hidden');
+
+  if (isHidden) {
+    // 開く
+    content.classList.remove('hidden');
+    if (arrow) arrow.textContent = '▲';
+    if (btn) btn.classList.add('border-pink-500/50');
+  } else {
+    // 閉じる
+    content.classList.add('hidden');
+    if (arrow) arrow.textContent = '▼';
+    if (btn) btn.classList.remove('border-pink-500/50');
+  }
+};
+
+/**
+ * フィルター条件が1つ以上選択されている場合、トグルボタンにピンクのドット（バッジ）を表示
+ */
+function updateFilterActiveBadge() {
+  const branchVal = document.getElementById('tier-branch-filter')?.value || '';
+  const groupVal = document.getElementById('tier-group-filter')?.value || '';
+  const categoryVal = document.getElementById('tier-category-filter')?.value || '';
+  const badge = document.getElementById('filter-status-badge');
+
+  if (!badge) return;
+
+  // 何らかのフィルターが選択されていればバッジを表示
+  if (branchVal || groupVal || categoryVal) {
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
 window.filterPoolMembers = function() {
+  updateFilterActiveBadge();
   renderPool();
 };
 
