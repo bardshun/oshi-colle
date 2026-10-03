@@ -272,7 +272,7 @@ function filterPoolMembers() {
   renderPool();
 }
 
-// 7. Tier表 全体プレビュー ＆ 画像保存処理 (新規追加)
+// 7. Tier表 全体プレビュー ＆ 画像保存処理 (横スクロール＆1行10固定対応版)
 window.openTierPreviewModal = function() {
   console.log('Tier表プレビューモーダルを開きます');
   const exportTarget = document.getElementById('tier-export-target');
@@ -293,11 +293,14 @@ window.openTierPreviewModal = function() {
 
         return `
           <div class="flex items-stretch bg-gray-950 border border-gray-800 rounded-lg overflow-hidden min-h-[80px]">
-            <div class="w-20 sm:w-24 flex items-center justify-center font-black text-xl sm:text-2xl border-r border-gray-800 shrink-0 text-center p-2 select-none"
+            <!-- ランクヘッダー (左端固定) -->
+            <div class="w-20 sm:w-24 flex items-center justify-center font-black text-xl sm:text-2xl border-r border-gray-800 shrink-0 text-center p-2 select-none sticky left-0 z-10"
                  style="background-color: ${tier.color}; color:${tier.textColor};">
               ${tier.name}
             </div>
-            <div class="flex-1 p-2 flex flex-wrap items-center gap-2 bg-gray-900/80">
+
+            <!-- ドロップエリア (折り返しなし・1行で10個分以上の最小幅確保・単体横スクロール) -->
+            <div class="flex-1 p-2 flex flex-nowrap items-center gap-2 bg-gray-900/80 overflow-x-auto min-w-[800px] custom-scrollbar">
               ${clonedChildrenHtml || '<span class="text-xs text-gray-600 pl-2">なし</span>'}
             </div>
           </div>
