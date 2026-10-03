@@ -14,10 +14,15 @@ let wallCount = 0; // ランク上に生成された「壁」のカウンター
 let selectedMemberData = null; // タップ選択中のアイテム情報 { id: '...' }
 let currentSortKey = 'ruby'; 
 let isSortAsc = true; // true: 昇順 (▲) / false: 降順 (▼)
+let saveTimeout = null;
+let isTierUIInitialized = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
   renderTierBoard();     // ボード初期表示
   await loadTierMembers(); // メンバー・グループ取得 ➔ フィルター初期化 ➔ プール描画を一括実行
+  loadDraftFromLocalStorage();
+  loadUIPreferences();
+  isTierUIInitialized = true;
 });
 
 // 1. Tierボードのレンダリング
@@ -236,6 +241,8 @@ function renderPool() {
 
   const memberCardsHtml = unplaced.map(m => createMemberCardHtml(m)).join('');
   poolEl.innerHTML = wallCardHtml + memberCardsHtml;
+  saveDraftToLocalStorage();
+  saveUIPreferences();
 }
 
 // メンバーカードHTML生成（画像サイズ維持＆高さ自動調整による見切れ完全防止版）
@@ -334,6 +341,7 @@ function dropToPool(e) {
 
   delete memberPositions[data];
   renderPool();
+  
 }
 
 // ランク上の壁を削除
@@ -348,11 +356,13 @@ function addTierRow() {
   defaultTiers.push({ id: newId, name: 'NEW', color: '#7f8c8d', textColor: '#ffffff' });
   renderTierBoard();
   restoreCardPositions();
+  
 }
 
 function updateTierName(tierId, newName) {
   const t = defaultTiers.find(x => x.id === tierId);
   if (t) t.name = newName;
+  
 }
 
 function updateTierColor(tierId, newColor) {
@@ -369,6 +379,7 @@ function updateTierColor(tierId, newColor) {
     renderTierBoard();
     restoreCardPositions();
   }
+  
 }
 
 function deleteTierRow(tierId) {
@@ -379,6 +390,7 @@ function deleteTierRow(tierId) {
   defaultTiers = defaultTiers.filter(x => x.id !== tierId);
   renderTierBoard();
   renderPool();
+  
 }
 
 // ランク削除時などの位置復元用
@@ -392,6 +404,7 @@ function restoreCardPositions() {
     }
   });
   updateCardHighlightStyles();
+  saveDraftToLocalStorage();
 }
 
 /**
@@ -417,6 +430,7 @@ window.toggleFilterAccordion = function() {
     if (arrow) arrow.textContent = '▼';
     if (btn) btn.classList.remove('border-pink-500/50');
   }
+  saveUIPreferences();
 };
 
 /**
@@ -621,6 +635,7 @@ function executePlacement(data, tierId, targetCardElement) {
   } else {
     targetDropZone.appendChild(elementToAppend);
   }
+  
 }
 
 // ドラッグ＆ドロップ処理（PC操作用）
@@ -635,6 +650,7 @@ function dropToTier(e, tierId) {
   selectedMemberData = null;
   renderPool();
   updateCardHighlightStyles();
+  
 }
 
 // カード・壁タップ時の処理 (選択・移動・割り込み統合版)
@@ -754,6 +770,7 @@ window.handlePoolClick = function(e) {
       }
     }
   }
+  
 };
 
 /**
@@ -837,4 +854,231 @@ function updateGroupOptions() {
     opt.textContent = g.name || ''; // 表示はグループ名
     groupSelect.appendChild(opt);
   });
+}
+
+/**
+ * 1. 現在のTier表の状態を共通フォーマット(JSONオブジェクト)で取得
+ */
+function getCurrentTierState(title = '') {
+  const currentTitle = title || document.getElementById('tier-title-input')?.value || '無題のTier表';
+  
+  return {
+    title: currentTitle,
+    updated_at: new Date().toISOString(),
+    tier_data: {
+      tiers: Array.isArray(defaultTiers) ? defaultTiers : [],
+      positions: memberPositions || {},
+      wall_count: wallCount || 0
+    }
+  };
+}
+
+/**
+ * 2. 渡されたデータオブジェクトを画面(グローバル変数 & DOM)に反映・復元
+ */
+function loadTierState(stateData) {
+  if (!stateData || !stateData.tier_data) return;
+
+  const { tiers, positions, wall_count } = stateData.tier_data;
+
+  // タイトルの反映
+  const titleInput = document.getElementById('tier-title-input');
+  if (titleInput && stateData.title) {
+    titleInput.value = stateData.title;
+  }
+
+  // 1. ランク構成の復元
+  if (Array.isArray(tiers)) {
+    defaultTiers = JSON.parse(JSON.stringify(tiers));
+  }
+
+  // 2. 配置情報の復元
+  if (positions && typeof positions === 'object') {
+    memberPositions = JSON.parse(JSON.stringify(positions));
+  }
+
+  // 3. 壁カウンターの復元
+  if (typeof wall_count === 'number') {
+    wallCount = wall_count;
+  }
+
+  // 選択状態のリセット
+  selectedMemberData = null;
+
+  // 画面の再描画
+  if (typeof renderTierBoard === 'function') renderTierBoard();
+  if (typeof restoreCardPositions === 'function') restoreCardPositions();
+  if (typeof renderPool === 'function') renderPool();
+  if (typeof updateCardHighlightStyles === 'function') updateCardHighlightStyles();
+}
+
+/**
+ * 3. LocalStorageへのドラフト自動保存 (オートセーブ)
+ */
+function saveDraftToLocalStorage() {
+  // 短時間に何度も連続で呼ばれた場合（ループ描画時など）に何十回も保存が走るのを防ぐ
+  if (saveTimeout) clearTimeout(saveTimeout);
+
+  saveTimeout = setTimeout(() => {
+    try {
+      const state = getCurrentTierState();
+      localStorage.setItem('tier_board_draft', JSON.stringify(state));
+    } catch (e) {
+      console.error('Draft auto-save failed:', e);
+    }
+  }, 300); // 0.3秒間操作が落ち着いたら1回だけ保存
+}
+
+/**
+ * 4. LocalStorageからのドラフト自動読み込み
+ */
+function loadDraftFromLocalStorage() {
+  try {
+    const saved = localStorage.getItem('tier_board_draft');
+    if (saved) {
+      const state = JSON.parse(saved);
+      loadTierState(state);
+      if (typeof showToast === 'function') {
+        showToast('前回の編集状態を復元しました', 'info');
+      }
+    }
+  } catch (e) {
+    console.error('Draft auto-load failed:', e);
+  }
+}
+
+/**
+ * 5. ドラフトの一時保存クリア (新規作成時などに使用)
+ */
+function clearDraftLocalStorage() {
+  localStorage.removeItem('tier_board_draft');
+}
+
+/**
+ * Tier表のリセット確認と実行
+ */
+window.confirmResetTierBoard = async function() {
+  const isConfirmed = await showConfirmModal({
+    title: 'Tier表のリセット',
+    message: '配置されたメンバーやランク設定をすべてリセットしますか？\n※この操作は取り消せません。',
+    confirmText: 'リセットする',
+    cancelText: 'キャンセル',
+    type: 'danger'
+  });
+  
+  if (isConfirmed) {
+    resetTierBoard();
+  }
+};
+
+/**
+ * Tier表を初期状態に戻す処理
+ */
+function resetTierBoard() {
+  // 1. LocalStorageのドラフトを消去
+  clearDraftLocalStorage();
+
+  // 2. 配置データと壁カウンターをリセット
+  memberPositions = {};
+  wallCount = 0;
+  selectedMemberData = null;
+
+  // 3. ランク構成（defaultTiers）をデフォルト状態に戻す（必要に応じて）
+  // ※もしデフォルトのランクセット（S, A, B, C等）が定義してあれば再代入
+  /*
+  defaultTiers = [
+    { id: 'tier-S', name: 'S', color: '#ff7f7f', textColor: '#000000' },
+    { id: 'tier-A', name: 'A', color: '#ffbf7f', textColor: '#000000' },
+    { id: 'tier-B', name: 'B', color: '#ffff7f', textColor: '#000000' },
+    { id: 'tier-C', name: 'C', color: '#7fff7f', textColor: '#000000' }
+  ];
+  */
+
+  // 4. タイトル入力欄のリセット
+  const titleInput = document.getElementById('tier-title-input');
+  if (titleInput) {
+    titleInput.value = '無題のTier表';
+  }
+
+  // 5. 画面の再描画
+  if (typeof renderTierBoard === 'function') renderTierBoard();
+  if (typeof restoreCardPositions === 'function') restoreCardPositions();
+  if (typeof renderPool === 'function') renderPool();
+  if (typeof updateCardHighlightStyles === 'function') updateCardHighlightStyles();
+
+  if (typeof showToast === 'function') {
+    showToast('Tier表を初期状態にリセットしました', 'info');
+  }
+}
+
+/**
+ * UI状態（フィルター・ソート・アコーディオン開閉）をLocalStorageに保存
+ */
+function saveUIPreferences() {
+  // 💡 初期化処理が終わるまでは保存処理を走らせない（上書き防止）
+  if (!isTierUIInitialized) return;
+
+  try {
+    const prefs = {
+      branch: document.getElementById('tier-branch-filter')?.value || '',
+      group: document.getElementById('tier-group-filter')?.value || '',
+      category: document.getElementById('tier-category-filter')?.value || '',
+      sortKey: typeof currentSortKey !== 'undefined' ? currentSortKey : 'ruby',
+      isSortAsc: typeof isSortAsc !== 'undefined' ? isSortAsc : true,
+      isAccordionOpen: !document.getElementById('filter-accordion-content')?.classList.contains('hidden')
+    };
+    localStorage.setItem('tier_ui_preferences', JSON.stringify(prefs));
+  } catch (e) {
+    console.error('UI preferences save failed:', e);
+  }
+}
+
+/**
+ * LocalStorageからUI状態を読み込んで画面に適用
+ */
+function loadUIPreferences() {
+  try {
+    const saved = localStorage.getItem('tier_ui_preferences');
+    if (!saved) return;
+
+    const prefs = JSON.parse(saved);
+
+    // 1. 拠点フィルターの復元
+    const branchEl = document.getElementById('tier-branch-filter');
+    if (branchEl && prefs.branch !== undefined) {
+      branchEl.value = prefs.branch;
+      if (typeof updateGroupOptions === 'function') updateGroupOptions();
+    }
+
+    // 2. グループ・区分フィルターの復元
+    const groupEl = document.getElementById('tier-group-filter');
+    if (groupEl && prefs.group !== undefined) groupEl.value = prefs.group;
+
+    const categoryEl = document.getElementById('tier-category-filter');
+    if (categoryEl && prefs.category !== undefined) categoryEl.value = prefs.category;
+
+    // 3. 💡 ソートキーおよび昇順・降順の復元
+    if (prefs.sortKey !== undefined) currentSortKey = prefs.sortKey;
+    if (prefs.isSortAsc !== undefined) isSortAsc = prefs.isSortAsc;
+
+    // 4. アコーディオン開閉状態の復元
+    const content = document.getElementById('filter-accordion-content');
+    const arrow = document.getElementById('accordion-arrow');
+    const btn = document.getElementById('toggle-filter-btn');
+
+    if (content && prefs.isAccordionOpen) {
+      content.classList.remove('hidden');
+      if (arrow) arrow.textContent = '▲';
+      if (btn) btn.classList.add('border-pink-500/50');
+    }
+
+    // 5. 💡 ソートボタンのUI表示（ピンク枠や矢印）を同期
+    if (typeof updateSortUI === 'function') updateSortUI();
+
+    // 6. 💡 復元されたソート順・フィルター条件でプール画面を最終再描画
+    if (typeof renderPool === 'function') renderPool();
+
+  } catch (e) {
+    console.error('UI preferences load failed:', e);
+  }
 }

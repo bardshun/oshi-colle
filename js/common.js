@@ -141,3 +141,73 @@ window.showToast = function(message, type = 'info', duration = 3000) {
     });
   }, duration);
 };
+
+
+/**
+ * 汎用確認ダイアログ（モーダル）を表示する
+ * @param {Object} options - 設定オブジェクト
+ * @param {string} options.title - モーダルのタイトル
+ * @param {string} options.message - 確認メッセージ（HTML可）
+ * @param {string} [options.confirmText='実行'] - 実行ボタンのテキスト
+ * @param {string} [options.cancelText='キャンセル'] - キャンセルボタンのテキスト
+ * @param {string} [options.type='danger'] - テーマ ('danger' | 'warning' | 'info')
+ * @returns {Promise<boolean>} ユーザーがOKを押したらtrue、キャンセルならfalse
+ */
+window.showConfirmModal = function({
+  title = '確認',
+  message = '本当に実行しますか？',
+  confirmText = '実行',
+  cancelText = 'キャンセル',
+  type = 'danger'
+}) {
+  return new Promise((resolve) => {
+    // 既存のモーダルがあれば削除
+    const existing = document.getElementById('common-confirm-modal');
+    if (existing) existing.remove();
+
+    // ボタンの色・テーマ切り替え
+    let btnColorClass = 'bg-red-600 hover:bg-red-500 text-white';
+    if (type === 'warning') btnColorClass = 'bg-amber-600 hover:bg-amber-500 text-white';
+    if (type === 'info') btnColorClass = 'bg-pink-600 hover:bg-pink-500 text-white';
+
+    // モーダルHTML動的生成
+    const modalHtml = `
+      <div id="common-confirm-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+        <div class="bg-gray-900 border border-gray-700 rounded-2xl max-w-sm w-full p-5 shadow-2xl flex flex-col space-y-4">
+          <h4 class="text-base font-bold text-gray-100 flex items-center gap-2">
+            ${type === 'danger' ? '⚠️' : 'ℹ️'} ${title}
+          </h4>
+          <p class="text-xs sm:text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">${message}</p>
+          <div class="flex justify-end gap-2 pt-2">
+            <button id="confirm-modal-cancel" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-bold rounded-lg border border-gray-700 transition">
+              ${cancelText}
+            </button>
+            <button id="confirm-modal-ok" class="px-3 py-1.5 ${btnColorClass} text-xs font-bold rounded-lg shadow transition">
+              ${confirmText}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    const modal = document.getElementById('common-confirm-modal');
+    const okBtn = document.getElementById('confirm-modal-ok');
+    const cancelBtn = document.getElementById('confirm-modal-cancel');
+
+    const cleanup = (result) => {
+      modal.classList.add('opacity-0');
+      setTimeout(() => modal.remove(), 150);
+      resolve(result);
+    };
+
+    okBtn.addEventListener('click', () => cleanup(true));
+    cancelBtn.addEventListener('click', () => cleanup(false));
+    
+    // 背景クリックでキャンセル扱い
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) cleanup(false);
+    });
+  });
+};
