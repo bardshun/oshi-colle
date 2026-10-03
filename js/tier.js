@@ -99,12 +99,16 @@ function renderPool() {
   const countEl = document.getElementById('pool-count');
   if (countEl) countEl.innerText = `${unplaced.length}名`;
 
-  // 1番目に常時「無限の壁カード」を置く
+  const isWallSelected = selectedMemberData && selectedMemberData.id === 'wall';
+
+  // 1番目に常時「無限の壁カード」を置く（タップ選択対応）
   const wallCardHtml = `
-    <div id="wall-template" draggable="true" ondragstart="dragStart(event, 'wall')" 
-         class="w-16 h-20 sm:w-20 sm:h-24 bg-black text-white border-2 border-gray-600 rounded-lg flex flex-col items-center justify-center cursor-grab active:cursor-grabbing hover:border-white transition flex-shrink-0 select-none shadow">
-      <span class="text-xl sm:text-2xl font-black">壁</span>
-      <span class="text-[9px] text-gray-400 mt-1">無限追加</span>
+    <div id="wall-template" draggable="true" 
+         ondragstart="dragStart(event, 'wall')" 
+         onclick="handleCardClick(event, 'wall')"
+         class="w-16 h-20 sm:w-20 sm:h-24 bg-black text-white border-2 ${isWallSelected ? 'border-pink-500 ring-4 ring-pink-500/80 scale-105 z-10 shadow-lg shadow-pink-500/30' : 'border-gray-600 hover:border-white'} rounded-lg flex flex-col items-center justify-center cursor-pointer transition flex-shrink-0 select-none shadow">
+      <span class="text-xl sm:text-2xl font-black pointer-events-none">壁</span>
+      <span class="text-[9px] text-gray-400 mt-1 pointer-events-none">無限追加</span>
     </div>
   `;
 
@@ -250,14 +254,19 @@ function deleteTierRow(tierId) {
   renderPool();
 }
 
+// ランク削除時などの位置復元用
 function restoreCardPositions() {
   Object.keys(memberPositions).forEach(mId => {
     const tierId = memberPositions[mId];
     const cardEl = document.getElementById(`card-${mId}`);
     const dropZone = document.getElementById(`drop-${tierId}`);
-    if (cardEl && dropZone) dropZone.appendChild(cardEl);
+    if (cardEl && dropZone && !dropZone.contains(cardEl)) {
+      dropZone.appendChild(cardEl);
+    }
   });
+  updateCardHighlightStyles();
 }
+
 
 function filterPoolMembers() {
   renderPool();
@@ -340,6 +349,7 @@ function executePlacement(data, tierId, targetCardElement) {
   let elementToAppend = null;
 
   if (data === 'wall') {
+    // 未配置プールからの「壁」新規追加
     wallCount++;
     const newWallId = `wall-placed-${wallCount}`;
     const newWallEl = document.createElement('div');
@@ -354,15 +364,17 @@ function executePlacement(data, tierId, targetCardElement) {
     `;
     elementToAppend = newWallEl;
   } else if (data.startsWith('wall-placed-')) {
+    // ランク上に配置済みの壁の移動
     elementToAppend = document.getElementById(data);
   } else {
+    // メンバーカードの移動
     memberPositions[data] = tierId;
     elementToAppend = document.getElementById(`card-${data}`);
   }
 
   if (!elementToAppend) return;
 
-  // 割り込み挿入 or 末尾追加
+  // 💡 割り込み判定：targetCardElement が存在しドロップゾーン内にあれば直前に挿入、なければ末尾追加
   if (targetCardElement && targetDropZone.contains(targetCardElement) && targetCardElement !== elementToAppend) {
     targetDropZone.insertBefore(elementToAppend, targetCardElement);
   } else {
@@ -370,7 +382,7 @@ function executePlacement(data, tierId, targetCardElement) {
   }
 }
 
-// ドラッグ＆ドロップ処理（割り込み対応）
+// ドラッグ＆ドロップ処理（PC操作用）
 function dropToTier(e, tierId) {
   e.preventDefault();
   const data = e.dataTransfer.getData('text/plain');
@@ -378,46 +390,81 @@ function dropToTier(e, tierId) {
 
   const targetCard = e.target.closest('#member-pool > div, .tier-content > div');
   executePlacement(data, tierId, targetCard);
+
+  selectedMemberData = null;
   renderPool();
+  updateCardHighlightStyles();
 }
 
-// カードタップ時の処理
-function handleCardClick(e, memberId) {
-  e.stopPropagation();
+// カード・壁タップ時の処理 (選択・移動・割り込み統合版)
+function handleCardClick(e, rawId) {
+  e.stopPropagation(); // 親要素へのイベント伝播を防止
 
-  // すでに何か選択中の状態で、別のカードをタップした場合 ➔ そのカードの手前に割り込み配置
-  if (selectedMemberData && selectedMemberData.id !== String(memberId)) {
-    const targetCard = document.getElementById(`card-${memberId}`) || document.getElementById(memberId);
-    const targetDropZone = targetCard ? targetCard.parentElement : null;
-    
+  const clickedStr = String(rawId);
+
+  // 1. すでに何か選択されている状態で「別のカード／壁」をタップした場合 ➔ その手前に割り込み配置！
+  if (selectedMemberData && selectedMemberData.id !== clickedStr) {
+    // タップされた要素（メンバーカード or 壁）を確定
+    const targetElement = document.getElementById(`card-${clickedStr}`) || document.getElementById(clickedStr);
+    const targetDropZone = targetElement ? targetElement.parentElement : null;
+
     if (targetDropZone && targetDropZone.id.startsWith('drop-')) {
       const tierId = targetDropZone.id.replace('drop-', '');
-      executePlacement(selectedMemberData.id, tierId, targetCard);
+      
+      // 選択中の要素を、タップされた要素(targetElement)の直前に割り込み配置
+      executePlacement(selectedMemberData.id, tierId, targetElement);
+
       selectedMemberData = null;
       renderPool();
-      restoreCardPositions();
+      updateCardHighlightStyles();
       return;
     }
   }
 
-  // 選択の切り替え（トグル）
-  if (selectedMemberData && selectedMemberData.id === String(memberId)) {
+  // 2. 選択トグル（同じものを押したら解除、別なら選択）
+  if (selectedMemberData && selectedMemberData.id === clickedStr) {
     selectedMemberData = null;
   } else {
-    selectedMemberData = { id: String(memberId) };
+    selectedMemberData = { id: clickedStr };
   }
 
   renderPool();
-  restoreCardPositions();
+  updateCardHighlightStyles();
 }
 
-// ランクエリア（背景・空きスペース）タップ時の処理
+// ランク背景（空きスペース）タップ時の処理 ➔ 末尾に配置
 function handleTierClick(tierId) {
   if (!selectedMemberData) return;
 
   executePlacement(selectedMemberData.id, tierId, null);
+
   selectedMemberData = null;
-  
   renderPool();
-  restoreCardPositions();
+  updateCardHighlightStyles();
+}
+
+// 💡 位置を壊さずに「選択ハイライト（ピンク枠）」だけを更新するヘルパー関数
+function updateCardHighlightStyles() {
+  // すべてのメンバーカードの枠線スタイルを同期
+  allMembers.forEach(m => {
+    const cardEl = document.getElementById(`card-${m.id}`);
+    if (!cardEl) return;
+
+    const isSelected = selectedMemberData && selectedMemberData.id === String(m.id);
+    if (isSelected) {
+      cardEl.className = "w-16 h-20 sm:w-20 sm:h-24 bg-gray-800 rounded-lg overflow-hidden border-2 border-pink-500 ring-4 ring-pink-500/80 scale-105 z-10 shadow-lg shadow-pink-500/30 cursor-pointer flex flex-col flex-shrink-0 select-none transition duration-150";
+    } else {
+      cardEl.className = "w-16 h-20 sm:w-20 sm:h-24 bg-gray-800 rounded-lg overflow-hidden border border-gray-700 cursor-pointer hover:border-pink-500 flex flex-col flex-shrink-0 select-none shadow transition duration-150";
+    }
+  });
+
+  // 設置された「壁」のハイライト状態も同期
+  document.querySelectorAll('[id^="wall-placed-"]').forEach(wallEl => {
+    const isSelected = selectedMemberData && selectedMemberData.id === wallEl.id;
+    if (isSelected) {
+      wallEl.className = "w-16 h-20 sm:w-20 sm:h-24 bg-black text-white border-2 border-pink-500 ring-4 ring-pink-500/80 scale-105 z-10 shadow-lg shadow-pink-500/30 rounded-lg flex flex-col items-center justify-center cursor-pointer transition flex-shrink-0 select-none relative group";
+    } else {
+      wallEl.className = "w-16 h-20 sm:w-20 sm:h-24 bg-black text-white border-2 border-gray-600 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-red-500 transition flex-shrink-0 select-none shadow relative group";
+    }
+  });
 }
