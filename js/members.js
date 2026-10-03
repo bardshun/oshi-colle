@@ -6,11 +6,23 @@ let currentCardSize = 'lg'; // 初期サイズ: 大
 
 document.addEventListener('DOMContentLoaded', async () => {
   setupPasteHandler();
+
+  // 1. 登録用フォームには全区分をセット
+  renderAllCategoryOptions('member-category', '🏢 グループの設定に従う');
+
+  // 2. データを全ロード（この中で members や groups が読み込まれる）
   await loadAllData();
 });
 
 async function loadAllData() {
+  // グループとメンバーを並列取得
   await Promise.all([loadGroups(), loadMembers()]);
+
+  // 💡 データ取得後、描画（filterMembers）の前にフィルターの選択肢を生成する
+  // ※ members の変数名が allMembers の場合は allMembers を渡してください
+  renderFilterCategoryOptions('category-filter', allMembers, '🏷️ すべての区分');
+
+  // 3. 描画・フィルタリング実行
   filterMembers();
   renderGroups();
   renderActiveManagement();

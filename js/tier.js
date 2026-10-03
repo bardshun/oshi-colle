@@ -851,8 +851,8 @@ function setupTierFilters(members, groups = []) {
     categorySelect.innerHTML = '<option value="">🏷️ すべての区分</option>';
     Array.from(categories).sort().forEach(c => {
       const opt = document.createElement('option');
-      opt.value = c;
-      opt.textContent = c;
+      opt.value = c; // 検索用の値は "idol" のまま
+      opt.textContent = getCategoryLabel(c); // 💡 表示だけ "アイドル" に変換
       categorySelect.appendChild(opt);
     });
   }

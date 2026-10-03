@@ -8,18 +8,20 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Supabase JS SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body class="bg-gray-900 text-white min-h-screen pb-20">
   
-  <!-- 全画面共通ヘッダー -->
+  <!-- 💡 全画面共通ヘッダー（common.js がここに注入されます） -->
   <header id="app-header"></header>
-  <header class="bg-gray-800 border-b border-gray-700 p-4 sticky top-0 z-50">
+
+  <!-- サブヘッダー（やり直しボタン等） -->
+  <header class="bg-gray-800/80 backdrop-blur-md border-b border-gray-700/80 p-3 sticky top-[57px] z-40">
     <div class="max-w-4xl mx-auto flex justify-between items-center">
-      <div class="flex items-center space-x-3">
-        <a href="index.html" class="text-gray-400 hover:text-white transition">🏠</a>
-        <h1 class="text-xl font-bold text-pink-500">🤝 好きな顔共通点</h1>
+      <div class="flex items-center space-x-2">
+        <span class="text-sm font-bold text-pink-400">🤝 好きな顔マッチ</span>
       </div>
-      <button onclick="resetGame()" class="text-xs text-gray-400 hover:text-white border border-gray-600 px-2.5 py-1 rounded-lg">
+      <button onclick="resetGame()" class="text-xs text-gray-400 hover:text-white border border-gray-600 px-2.5 py-1 rounded-lg transition">
         最初からやり直す
       </button>
     </div>
@@ -29,24 +31,60 @@
   <main class="max-w-2xl mx-auto p-4 space-y-6">
     
     <!-- PHASE 1: ユーザー名入力画面 -->
-    <div id="setup-screen" class="bg-gray-800 p-6 rounded-2xl border border-gray-700 space-y-5 text-center">
+    <div id="setup-screen" class="bg-gray-800 p-6 rounded-2xl border border-gray-700 space-y-5 text-center shadow-xl">
       <div class="space-y-1">
         <h2 class="text-xl font-bold text-pink-400">参加者の名前を入力</h2>
-        <p class="text-xs text-gray-400">3人で遊ぶモードです。ニックネームを入力してください！</p>
+        <p class="text-xs text-gray-400">3人で遊ぶモードです。条件を指定してゲームをスタート！</p>
       </div>
 
-      <div class="space-y-3 max-w-sm mx-auto text-left">
-        <div>
-          <label class="block text-xs text-pink-400 font-bold mb-1">ユーザー A</label>
-          <input type="text" id="user-a-name" value="プレイヤーA" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-pink-500">
+      <div class="space-y-4 max-w-sm mx-auto text-left">
+        <!-- ユーザー名入力 -->
+        <div class="space-y-2">
+          <div>
+            <label class="block text-xs text-pink-400 font-bold mb-1">ユーザー A</label>
+            <input type="text" id="user-a-name" value="プレイヤーA" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-pink-500">
+          </div>
+          <div>
+            <label class="block text-xs text-blue-400 font-bold mb-1">ユーザー B</label>
+            <input type="text" id="user-b-name" value="プレイヤーB" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-pink-500">
+          </div>
+          <div>
+            <label class="block text-xs text-emerald-400 font-bold mb-1">ユーザー C</label>
+            <input type="text" id="user-c-name" value="プレイヤーC" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-pink-500">
+          </div>
         </div>
-        <div>
-          <label class="block text-xs text-blue-400 font-bold mb-1">ユーザー B</label>
-          <input type="text" id="user-b-name" value="プレイヤーB" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-pink-500">
-        </div>
-        <div>
-          <label class="block text-xs text-emerald-400 font-bold mb-1">ユーザー C</label>
-          <input type="text" id="user-c-name" value="プレイヤーC" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-pink-500">
+
+        <!-- 💡 メンバー絞り込み設定（チェックボックス形式） -->
+        <div class="pt-3 border-t border-gray-700 space-y-3">
+          <label class="block text-xs text-gray-300 font-bold">🎯 対象メンバーの絞り込み</label>
+          
+          <!-- 拠点（エリア）の選択 -->
+          <div class="space-y-1.5">
+            <div class="flex justify-between items-center">
+              <span class="text-[11px] text-gray-400 font-bold">拠点（エリア）</span>
+              <div class="space-x-2 text-[10px]">
+                <button type="button" onclick="toggleAllCheckboxes('filter-prefecture-list', true)" class="text-pink-400 hover:underline">すべて選択</button>
+                <button type="button" onclick="toggleAllCheckboxes('filter-prefecture-list', false)" class="text-gray-400 hover:underline">解除</button>
+              </div>
+            </div>
+            <div id="filter-prefecture-list" class="bg-gray-900 border border-gray-700 rounded-lg p-2.5 max-h-32 overflow-y-auto space-y-1.5 text-xs text-gray-300">
+              <span class="text-gray-500 text-[10px]">読み込み中...</span>
+            </div>
+          </div>
+
+          <!-- 区分（カテゴリ）の選択 -->
+          <div class="space-y-1.5">
+            <div class="flex justify-between items-center">
+              <span class="text-[11px] text-gray-400 font-bold">区分（カテゴリ）</span>
+              <div class="space-x-2 text-[10px]">
+                <button type="button" onclick="toggleAllCheckboxes('filter-category-list', true)" class="text-pink-400 hover:underline">すべて選択</button>
+                <button type="button" onclick="toggleAllCheckboxes('filter-category-list', false)" class="text-gray-400 hover:underline">解除</button>
+              </div>
+            </div>
+            <div id="filter-category-list" class="bg-gray-900 border border-gray-700 rounded-lg p-2.5 max-h-32 overflow-y-auto space-y-1.5 text-xs text-gray-300">
+              <span class="text-gray-500 text-[10px]">読み込み中...</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -99,41 +137,147 @@
           </button>
         </div>
 
-        <button onclick="nextMember()" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-xl transition text-sm flex items-center justify-center space-x-2 border border-gray-600 mt-2">
-          <span>次の顔へ</span>
-          <span>➔</span>
-        </button>
+        <!-- 💡 ナビゲーション操作ボタン群（前へ / 次へ / 完了） -->
+        <div class="space-y-2 mt-2">
+          <div class="grid grid-cols-2 gap-2">
+            <!-- ⬅️ 前の顔へボタン -->
+            <button id="btn-prev-member" onclick="prevMember()" class="bg-gray-700 hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-xl transition text-xs flex items-center justify-center space-x-1 border border-gray-600">
+              <span>⬅️</span>
+              <span>前の顔へ</span>
+            </button>
+
+            <!-- ➡️ 次の顔へボタン -->
+            <button onclick="nextMember()" class="bg-pink-600 hover:bg-pink-500 text-white font-bold py-2.5 rounded-xl transition text-xs flex items-center justify-center space-x-1 shadow-md">
+              <span>次の顔へ</span>
+              <span>➔</span>
+            </button>
+          </div>
+
+          <!-- 🏁 ここで完了ボタン -->
+          <button onclick="finishGameEarly()" class="w-full bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white font-bold py-2 rounded-xl transition text-xs flex items-center justify-center space-x-1 border border-slate-700/80">
+            <span>🏁</span>
+            <span>ここで終わって結果を見る</span>
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- PHASE 3: 結果画面 (初期は非表示) -->
-    <div id="result-screen" class="bg-gray-800 p-6 rounded-2xl border border-gray-700 space-y-6 hidden">
+    <!-- PHASE 3: 結果画面 -->
+    <div id="result-screen" class="bg-gray-800 p-4 sm:p-6 rounded-2xl border border-gray-700 space-y-6 hidden shadow-2xl">
       <div class="text-center space-y-1 border-b border-gray-700 pb-4">
         <h2 class="text-2xl font-black text-pink-400">🎉 マッチング結果</h2>
-        <p class="text-xs text-gray-400">3人の「好きな顔」の共通点一覧です！</p>
+        <p class="text-xs text-gray-400">みんなの「好きな顔」マップ＆リストです！</p>
       </div>
 
-      <!-- 🏆 3人全員の好きな顔（奇跡の共通点） -->
-      <div class="space-y-3">
-        <h3 class="font-bold text-sm text-yellow-400 flex items-center space-x-1">
-          <span>👑 3人全員が「好き」な顔</span>
-        </h3>
-        <div id="result-all-match" class="grid grid-cols-3 sm:grid-cols-4 gap-2">
-          <!-- JSでカード挿入 -->
+      <!-- 表示切替タブ ＆ 画像保存ボタン -->
+      <div class="space-y-2">
+        <div class="flex bg-gray-900 p-1 rounded-xl border border-gray-700">
+          <button id="tab-view-list" onclick="switchResultView('list')" class="flex-1 py-2 text-xs font-bold rounded-lg bg-pink-600 text-white transition">
+            📋 リスト表示
+          </button>
+          <button id="tab-view-map" onclick="switchResultView('map')" class="flex-1 py-2 text-xs font-bold rounded-lg text-gray-400 hover:text-white transition">
+            📐 マップ表示
+          </button>
+        </div>
+
+        <!-- 📸 画像保存ボタン -->
+        <button onclick="downloadResultImage()" class="w-full bg-slate-900 hover:bg-slate-800 text-pink-400 border border-pink-500/50 hover:border-pink-500 py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center space-x-1.5 shadow-md">
+          <span>📸</span>
+          <span>結果を画像で保存（SNSシェア用）</span>
+        </button>
+      </div>
+
+      <!-- ========================================== -->
+      <!-- 1. リスト表示エリア (#view-list) -->
+      <!-- ========================================== -->
+      <div id="view-list" class="space-y-6">
+        <!-- 👑 3人全員の好きな顔 -->
+        <div class="space-y-3">
+          <h3 class="font-bold text-sm text-yellow-400 flex items-center space-x-1">
+            <span>👑 3人全員が「好き」な顔</span>
+          </h3>
+          <div id="result-all-match" class="grid grid-cols-3 sm:grid-cols-4 gap-2"></div>
+        </div>
+
+        <!-- 🤝 2人の共通点 -->
+        <div class="space-y-3 border-t border-gray-700/50 pt-4">
+          <h3 class="font-bold text-sm text-pink-300 flex items-center space-x-1">
+            <span>🤝 2人の共通点</span>
+          </h3>
+          <div id="result-two-match" class="space-y-3 text-xs"></div>
+        </div>
+
+        <!-- 👤 個人の好み -->
+        <div class="space-y-3 border-t border-gray-700/50 pt-4">
+          <h3 class="font-bold text-sm text-indigo-300 flex items-center space-x-1">
+            <span>👤 個人の癖（1人のみ選択）</span>
+          </h3>
+          <div id="result-one-match" class="space-y-3 text-xs"></div>
         </div>
       </div>
 
-      <!-- 👥 2人の共通点 -->
-      <div class="space-y-3 border-t border-gray-700/50 pt-4">
-        <h3 class="font-bold text-sm text-pink-300 flex items-center space-x-1">
-          <span>🤝 2人の共通点</span>
-        </h3>
-        <div id="result-two-match" class="space-y-2 text-xs">
-          <!-- JSでカード挿入 -->
+      <!-- ========================================== -->
+      <!-- 2. マップ表示エリア (#view-map) -->
+      <!-- ========================================== -->
+      <div id="view-map" class="space-y-3 hidden">
+        <p class="text-center text-[11px] text-gray-400">正三角形の頂点が個人、各辺が2人の共通点、中央が3人の共通点です</p>
+        
+        <!-- 💡 キャプチャ対象エリア（ここをそのまま綺麗に画像化します） -->
+        <div id="map-capture-area" class="relative w-full max-w-lg mx-auto bg-slate-950 border border-slate-800 rounded-2xl p-4 aspect-square min-h-[460px] sm:min-h-[520px] overflow-hidden">
+          
+          <!-- 💡 頂点 A (上中央) -->
+          <div class="absolute top-3 left-1/2 -translate-x-1/2 flex flex-col items-center z-10 w-36 sm:w-44">
+            <div id="map-vertex-a-label" class="bg-pink-900/90 text-pink-300 border border-pink-500 px-2.5 py-0.5 rounded-full text-[11px] font-bold mb-1 shadow-md truncate max-w-full">
+              プレイヤーA
+            </div>
+            <div id="map-node-a" class="flex flex-wrap justify-center gap-1 w-full min-h-[40px] p-1 bg-slate-900/80 border border-pink-500/30 rounded-xl"></div>
+          </div>
+
+          <!-- 💡 辺 A & B (左上斜め) -->
+          <div class="absolute top-[26%] left-[2%] flex flex-col items-center z-10 w-28 sm:w-36">
+            <div id="map-edge-ab-label" class="text-[9px] text-pink-300/90 font-bold mb-0.5 truncate max-w-full">A & B</div>
+            <div id="map-node-ab" class="flex flex-wrap justify-center gap-1 w-full min-h-[36px] p-1 bg-slate-900/80 border border-slate-700 rounded-lg"></div>
+          </div>
+
+          <!-- 💡 辺 A & C (右上斜め) -->
+          <div class="absolute top-[26%] right-[2%] flex flex-col items-center z-10 w-28 sm:w-36">
+            <div id="map-edge-ac-label" class="text-[9px] text-purple-300/90 font-bold mb-0.5 truncate max-w-full">A & C</div>
+            <div id="map-node-ac" class="flex flex-wrap justify-center gap-1 w-full min-h-[36px] p-1 bg-slate-900/80 border border-slate-700 rounded-lg"></div>
+          </div>
+
+          <!-- 💡 3人共通 (中央) -->
+          <div class="absolute top-[48%] left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-20 w-36 sm:w-44">
+            <div class="text-[10px] text-yellow-400 font-bold mb-1 shadow-sm">👑 3人共通</div>
+            <div id="map-node-abc" class="flex flex-wrap justify-center gap-1 w-full min-h-[44px] p-1.5 bg-yellow-950/60 border-2 border-yellow-500/80 rounded-xl shadow-[0_0_15px_rgba(234,179,8,0.25)]"></div>
+          </div>
+
+          <!-- 💡 頂点 B (左下) -->
+          <div class="absolute bottom-3 left-3 flex flex-col items-center z-10 w-32 sm:w-40">
+            <div id="map-node-b" class="flex flex-wrap justify-center gap-1 w-full min-h-[40px] p-1 bg-slate-900/80 border border-blue-500/30 rounded-xl mb-1"></div>
+            <div id="map-vertex-b-label" class="bg-blue-900/90 text-blue-300 border border-blue-500 px-2.5 py-0.5 rounded-full text-[11px] font-bold shadow-md truncate max-w-full">
+              プレイヤーB
+            </div>
+          </div>
+
+          <!-- 💡 辺 B & C (底辺中央) -->
+          <div class="absolute bottom-3 left-1/2 -translate-x-1/2 flex flex-col items-center z-10 w-32 sm:w-40">
+            <div id="map-edge-bc-label" class="text-[9px] text-emerald-300/90 font-bold mb-0.5 truncate max-w-full">B & C</div>
+            <div id="map-node-bc" class="flex flex-wrap justify-center gap-1 w-full min-h-[36px] p-1 bg-slate-900/80 border border-slate-700 rounded-lg"></div>
+          </div>
+
+          <!-- 💡 頂点 C (右下) -->
+          <div class="absolute bottom-3 right-3 flex flex-col items-center z-10 w-32 sm:w-40">
+            <div id="map-node-c" class="flex flex-wrap justify-center gap-1 w-full min-h-[40px] p-1 bg-slate-900/80 border border-emerald-500/30 rounded-xl mb-1"></div>
+            <div id="map-vertex-c-label" class="bg-emerald-900/90 text-emerald-300 border border-emerald-500 px-2.5 py-0.5 rounded-full text-[11px] font-bold shadow-md truncate max-w-full">
+              プレイヤーC
+            </div>
+          </div>
+
         </div>
       </div>
 
-      <button onclick="resetGame()" class="w-full bg-pink-600 hover:bg-pink-500 text-white font-bold py-3 rounded-xl transition text-sm">
+      <!-- もう一度遊ぶボタン -->
+      <button onclick="resetGame()" class="w-full bg-pink-600 hover:bg-pink-500 text-white font-bold py-3 rounded-xl transition text-sm shadow-lg">
         もう一度あそぶ 🔄
       </button>
     </div>

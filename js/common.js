@@ -8,6 +8,71 @@ window.supabase = supabaseClient;
 
 console.log('推しコレ: Supabase connected!');
 
+// 💡 区分の表示名変換マップ（全体共通）
+const CATEGORY_NAME_MAP = {
+  'idol': 'アイドル',
+  'concept_cafe': 'コンカフェ',
+  'artist': 'アーティスト',
+  'model': 'モデル',
+  'voice_actor': '声優',
+  'other': 'その他'
+};
+
+/**
+ * 区分コード（'idol' 等）を表示用名称（'アイドル'）に変換する共通ヘルパー
+ * @param {string} categoryKey 
+ * @returns {string}
+ */
+function getCategoryLabel(categoryKey) {
+  if (!categoryKey) return '';
+  return CATEGORY_NAME_MAP[categoryKey] || categoryKey;
+}
+
+/**
+ * 1️⃣ 登録用フォーム向け：全区分をドロップダウンにセットする
+ * @param {string} selectId - 対象の<select>要素のID
+ * @param {string} defaultLabel - 先頭の未選択時のラベル
+ */
+function renderAllCategoryOptions(selectId, defaultLabel = '🏢 グループの設定に従う') {
+  const select = document.getElementById(selectId);
+  if (!select) return;
+
+  select.innerHTML = `<option value="">${defaultLabel}</option>`;
+  Object.entries(CATEGORY_NAME_MAP).forEach(([key, label]) => {
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = label;
+    select.appendChild(opt);
+  });
+}
+
+/**
+ * 2️⃣ フィルター用向け：データ内に存在する区分だけをドロップダウンにセットする
+ * @param {string} selectId - 対象の<select>要素のID
+ * @param {Array} dataList - メンバーやグループの配列
+ * @param {string} defaultLabel - 先頭の「すべて」ラベル
+ */
+// common.js 側の補強案
+function renderFilterCategoryOptions(selectId, dataList = [], defaultLabel = '🏷️ すべての区分') {
+  const select = document.getElementById(selectId);
+  if (!select) return;
+
+  const categories = new Set();
+  dataList.forEach(item => {
+    // メンバー自身の category 、または所属グループ（item.groups など）の category
+    const cat = item.category || item.groups?.category;
+    if (cat) categories.add(cat);
+  });
+
+  select.innerHTML = `<option value="">${defaultLabel}</option>`;
+  Array.from(categories).sort().forEach(key => {
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = getCategoryLabel(key);
+    select.appendChild(opt);
+  });
+}
+
 // Google Fonts (Plus Jakarta Sans & Noto Sans JP) の動的読み込み
 if (!document.getElementById('google-fonts-link')) {
   const link1 = document.createElement('link');
