@@ -25,67 +25,94 @@
     </div>
 
     <!-- TAB 1: メンバー一覧 -->
-    <!-- TAB 1: メンバー一覧 -->
     <section id="tab-content-members" class="space-y-4">
       <!-- フィルター・コントロールパネル -->
       <div class="bg-slate-900/60 p-3 rounded-2xl border border-slate-800 space-y-3">
-        <!-- 上段：検索 ＆ 各種フィルター -->
-        <div class="flex flex-wrap gap-2 text-xs">
+        
+        <!-- 1. 最上段（常時表示）：検索 ＆ メンバー追加 ＆ 絞り込みトグル -->
+        <div class="flex items-center gap-2">
           <!-- 検索インプット -->
-          <input type="text" id="search-input" oninput="filterMembers()" placeholder="🔍 メンバー名・グループ名..." class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 focus:outline-none focus:border-pink-500 flex-1 min-w-[140px]">
-          
-          <!-- グループフィルター -->
-          <select id="group-filter" onchange="filterMembers()" class="bg-slate-950 border border-slate-800 rounded-xl px-2 py-2 focus:outline-none text-slate-300">
-            <option value="">🏢 すべてのグループ</option>
-          </select>
+          <input type="text" id="search-input" oninput="filterMembers()" placeholder="🔍 メンバー名・グループ名..." class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-pink-500 flex-1 min-w-0">
 
-          <!-- 区分フィルター -->
-          <select id="category-filter" onchange="filterMembers()" class="bg-slate-950 border border-slate-800 rounded-xl px-2 py-2 focus:outline-none text-slate-300">
-            <option value="">🏷️ すべての区分</option>
-            <option value="idol">アイドル</option>
-            <option value="concept_cafe">コンカフェ</option>
-            <option value="other">その他</option>
-          </select>
+          <!-- 💡 常時表示のメンバー追加ボタン -->
+          <button onclick="openMemberModal()" class="bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs px-3 py-2 rounded-xl transition shadow-[0_0_12px_rgba(236,72,153,0.4)] flex items-center gap-1 shrink-0 whitespace-nowrap">
+            <span>＋</span> メンバー追加
+          </button>
 
-          <!-- 拠点フィルター -->
-          <select id="prefecture-filter" onchange="filterMembers()" class="bg-slate-950 border border-slate-800 rounded-xl px-2 py-2 focus:outline-none text-slate-300">
-            <option value="">📍 すべての拠点</option>
-            <option value="東京都">東京都</option>
-            <option value="大阪府">大阪府</option>
-            <option value="愛知県">愛知県</option>
-            <option value="福岡県">福岡県</option>
-            <option value="北海道">北海道</option>
-            <option value="その他">その他</option>
-          </select>
+          <!-- 💡 絞り込み開閉ボタン -->
+          <button onclick="toggleFilterPanel()" id="toggle-filter-btn" class="bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 px-2.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1 shrink-0 whitespace-nowrap">
+            <span>⚙️ 絞り込み</span>
+            <span id="filter-arrow-icon" class="text-[10px] transition-transform duration-200">▼</span>
+          </button>
         </div>
 
-        <!-- 下段：状態チェックボックス ＆ 表示サイズ切り替え ＆ 追加ボタン -->
-        <div class="flex flex-wrap justify-between items-center gap-3 pt-2 border-t border-slate-800/80">
-          <!-- ステータス（現役・卒業）チェックボックス -->
-          <div class="flex items-center space-x-4 text-xs">
-            <label class="flex items-center space-x-1.5 cursor-pointer text-slate-300">
-              <input type="checkbox" id="status-active-chk" checked onchange="filterMembers()" class="accent-pink-500 rounded">
-              <span>現役</span>
-            </label>
-            <label class="flex items-center space-x-1.5 cursor-pointer text-slate-400">
-              <input type="checkbox" id="status-graduated-chk" onchange="filterMembers()" class="accent-pink-500 rounded">
-              <span>卒業 / 離籍</span>
-            </label>
+        <!-- 2. 開閉対象のフィルター詳細パネル -->
+        <div id="filter-details-panel" class="space-y-3 pt-2 border-t border-slate-800/80 transition-all duration-300">
+          
+          <!-- 各種セレクトフィルター（折り返し対応） -->
+          <div class="flex flex-wrap gap-2 text-xs">
+            <!-- ソート -->
+            <select id="sort-filter" onchange="filterMembers()" class="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 focus:outline-none text-slate-300 flex-1 min-w-[130px]">
+              <option value="name_asc">🔤 名前順（五十音）</option>
+              <option value="group_asc">🏢 グループ順</option>
+              <option value="created_desc">🆕 登録順（新しい順）</option>
+              <option value="created_asc">⏳ 登録順（古い順）</option>
+            </select>
+
+            <!-- グループフィルター -->
+            <select id="group-filter" onchange="filterMembers()" class="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 focus:outline-none text-slate-300 flex-1 min-w-[130px]">
+              <option value="">🏢 すべてのグループ</option>
+            </select>
+
+            <!-- 区分フィルター -->
+            <select id="category-filter" onchange="filterMembers()" class="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 focus:outline-none text-slate-300 flex-1 min-w-[120px]">
+              <option value="">🏷️ すべての区分</option>
+              <option value="idol">アイドル</option>
+              <option value="concept_cafe">コンカフェ</option>
+              <option value="other">その他</option>
+            </select>
+
+            <!-- 拠点フィルター -->
+            <select id="prefecture-filter" onchange="filterMembers()" class="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 focus:outline-none text-slate-300 flex-1 min-w-[120px]">
+              <option value="">📍 すべての拠点</option>
+              <option value="東京都">東京都</option>
+              <option value="大阪府">大阪府</option>
+              <option value="愛知県">愛知県</option>
+              <option value="福岡県">福岡県</option>
+              <option value="北海道">北海道</option>
+              <option value="その他">その他</option>
+            </select>
+
+            <!-- ユーザー表示設定（ON / OFF） -->
+            <select id="visibility-filter" onchange="filterMembers()" class="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 focus:outline-none text-slate-300 flex-1 min-w-[130px]">
+              <option value="visible" selected>👁️ 表示設定: ONのみ</option>
+              <option value="hidden">🙈 表示設定: OFF（非表示のみ）</option>
+              <option value="all">🌐 表示設定: すべて表示</option>
+            </select>
           </div>
 
-          <!-- 表示サイズ切り替え ＆ 追加ボタン -->
-          <div class="flex items-center gap-3 ml-auto">
+          <!-- 下段：状態チェックボックス ＆ 表示サイズ切り替え -->
+          <div class="flex flex-wrap justify-between items-center gap-3 pt-2 border-t border-slate-800/60">
+            <!-- ステータス（現役・卒業）チェックボックス -->
+            <div class="flex items-center space-x-4 text-xs">
+              <label class="flex items-center space-x-1.5 cursor-pointer text-slate-300">
+                <input type="checkbox" id="status-active-chk" checked onchange="filterMembers()" class="accent-pink-500 rounded">
+                <span>現役</span>
+              </label>
+              <label class="flex items-center space-x-1.5 cursor-pointer text-slate-400">
+                <input type="checkbox" id="status-graduated-chk" onchange="filterMembers()" class="accent-pink-500 rounded">
+                <span>卒業 / 離籍</span>
+              </label>
+            </div>
+
             <!-- サイズ切替ボタン -->
-            <div class="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-[11px] font-bold">
+            <div class="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-[11px] font-bold ml-auto">
               <button id="size-btn-sm" onclick="changeCardSize('sm')" class="px-2 py-1 rounded-lg text-slate-400 hover:text-white transition">小</button>
               <button id="size-btn-md" onclick="changeCardSize('md')" class="px-2 py-1 rounded-lg text-slate-400 hover:text-white transition">中</button>
               <button id="size-btn-lg" onclick="changeCardSize('lg')" class="px-2 py-1 rounded-lg bg-pink-600 text-white transition">大</button>
             </div>
-
-            <button onclick="openMemberModal()" class="bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition shadow-[0_0_12px_rgba(236,72,153,0.4)] flex items-center gap-1 shrink-0">
-              <span>＋</span> メンバー追加
-            </button>
           </div>
+
         </div>
       </div>
 
@@ -111,11 +138,19 @@
 
     <!-- TAB 3: ユーザー表示設定 -->
     <section id="tab-content-active" class="space-y-4 hidden">
-      <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 space-y-1">
-        <h2 class="text-base font-bold text-pink-400">👁 プレイ用表示設定</h2>
-        <p class="text-xs text-slate-400">Tier表や共通点ゲームで使用したいグループ・メンバーのみチェックを入れてください。</p>
+      <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 flex flex-wrap justify-between items-center gap-3">
+        <div>
+          <h2 class="text-base font-bold text-pink-400">👁 プレイ用表示設定</h2>
+          <p class="text-xs text-slate-400">Tier表や共通点ゲームで使用したいグループ・メンバーのみチェックを入れてください。</p>
+        </div>
+
+        <!-- 💡 明示的な一括保存ボタン -->
+        <button onclick="saveUserMemberSettings()" class="bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-[0_0_12px_rgba(236,72,153,0.4)] shrink-0 flex items-center gap-1">
+          <span>💾</span> 設定を保存
+        </button>
       </div>
 
+      <!-- グループ・メンバー一覧コンテナ -->
       <div id="active-management-list" class="space-y-4">
         <!-- JSで生成 -->
       </div>

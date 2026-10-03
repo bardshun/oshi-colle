@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function loadAllData() {
   await Promise.all([loadGroups(), loadMembers()]);
-  renderMembers();
+  filterMembers();
   renderGroups();
   renderActiveManagement();
 }
@@ -55,11 +55,46 @@ async function loadGroups() {
 }
 
 async function loadMembers() {
-  const { data } = await supabase
+  const user = (await supabase.auth.getUser())?.data?.user;
+
+  // 1. 全メンバー情報（マスター）を取得
+  const { data, error } = await supabase
     .from('members')
     .select(`*, groups(*), member_images(image_url, is_default)`)
     .order('name');
-  allMembers = data || [];
+
+  if (error) {
+    console.error('メンバー一覧の取得に失敗:', error);
+    allMembers = [];
+    return;
+  }
+
+  const rawMembers = data || [];
+
+  // 2. ログインユーザー個人の表示設定を取得（ログイン時のみ）
+  let settingsMap = new Map();
+  if (user) {
+    const { data: userSettings, error: sError } = await supabase
+      .from('user_member_settings')
+      .select('member_id, is_hidden')
+      .eq('user_id', user.id);
+
+    if (!sError && userSettings) {
+      // member_id をキーにして Map 化
+      settingsMap = new Map(userSettings.map(s => [String(s.member_id), s.is_hidden]));
+    }
+  }
+
+  // 3. マスターデータに is_hidden（ユーザー設定）を結合
+  allMembers = rawMembers.map(m => ({
+    ...m,
+    // 保存データがあればその is_hidden を適用、無ければ false（表示）
+    is_hidden: settingsMap.has(String(m.id)) ? settingsMap.get(String(m.id)) : false
+  }));
+
+  // 💡 4. 描画処理の初期実行（もし初期化フローで個別に呼んでいない場合はここで同期）
+  if (typeof filterMembers === 'function') filterMembers();
+  if (typeof renderActiveManagement === 'function') renderActiveManagement();
 }
 
 // 2. メンバー描画 & フィルター
@@ -88,12 +123,17 @@ function renderMembers(filteredList = null) {
     const defaultImg = m.member_images?.find(i => i.is_default) || m.member_images?.[0];
     const imgUrl = defaultImg ? defaultImg.image_url : 'https://via.placeholder.com/150?text=No+Img';
     const isGrad = m.status === 'graduated';
+    const isHidden = m.is_hidden ?? false; // 💡 ユーザー非表示フラグ
     const groupName = m.groups ? m.groups.name : '未所属';
+
+    // 💡 非表示・卒業時の見た目スタイル（非表示ならモノクロ＋透明化）
+    const hiddenStyle = isHidden ? 'opacity-40 grayscale hover:opacity-70' : (isGrad ? 'opacity-60' : '');
 
     // --- パターン1: 小（画像なし・シンプル表示） ---
     if (currentCardSize === 'sm') {
       return `
-        <div onclick="openMemberModal(${m.id})" class="bg-slate-900/90 border border-slate-800 hover:border-pink-500/60 p-2 rounded-xl transition cursor-pointer relative ${isGrad ? 'opacity-50' : ''}">
+        <div onclick="openMemberModal(${m.id})" class="bg-slate-900/90 border border-slate-800 hover:border-pink-500/60 p-2 rounded-xl transition cursor-pointer relative ${hiddenStyle}">
+          ${isHidden ? '<span class="text-[8px] text-slate-400 block font-bold">🙈 非表示</span>' : ''}
           <div class="text-[9px] text-pink-400 font-bold truncate">${groupName}</div>
           <div class="font-bold text-xs text-slate-100 truncate">${m.name}</div>
           ${isGrad ? '<span class="text-[8px] text-gray-500 block">卒業</span>' : ''}
@@ -104,10 +144,15 @@ function renderMembers(filteredList = null) {
     // --- パターン2: 中（スマホ3列コンパクト表示） ---
     if (currentCardSize === 'md') {
       return `
-        <div class="bg-slate-900/80 border border-slate-800 rounded-xl overflow-hidden shadow-md hover:border-pink-500/50 transition relative ${isGrad ? 'opacity-60' : ''}">
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl overflow-hidden shadow-md hover:border-pink-500/50 transition relative ${hiddenStyle}">
           <div class="aspect-square bg-slate-950 relative overflow-hidden">
             <img src="${imgUrl}" class="w-full h-full object-cover">
-            <button onclick="openMemberModal(${m.id})" class="absolute top-1 right-1 bg-slate-950/80 hover:bg-pink-600 text-white text-[9px] px-1.5 py-0.5 rounded border border-slate-700 backdrop-blur-sm transition">
+            ${isHidden ? `
+              <span class="absolute top-1 left-1 bg-slate-950/80 text-slate-300 border border-slate-700 text-[8px] px-1 py-0.2 rounded font-bold backdrop-blur-sm z-10">
+                🙈 非表示
+              </span>
+            ` : ''}
+            <button onclick="openMemberModal(${m.id})" class="absolute top-1 right-1 bg-slate-950/80 hover:bg-pink-600 text-white text-[9px] px-1.5 py-0.5 rounded border border-slate-700 backdrop-blur-sm transition z-10">
               ✏️
             </button>
           </div>
@@ -121,10 +166,15 @@ function renderMembers(filteredList = null) {
 
     // --- パターン3: 大（今のデフォルトサイズ） ---
     return `
-      <div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-lg group hover:border-pink-500/50 transition relative ${isGrad ? 'opacity-60' : ''}">
+      <div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-lg group hover:border-pink-500/50 transition relative ${hiddenStyle}">
         <div class="aspect-square bg-slate-950 relative overflow-hidden">
           <img src="${imgUrl}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
-          <button onclick="openMemberModal(${m.id})" class="absolute top-2 right-2 bg-slate-950/80 hover:bg-pink-600 text-white text-[10px] px-2 py-1 rounded-lg border border-slate-700 backdrop-blur-sm transition">
+          ${isHidden ? `
+            <span class="absolute top-2 left-2 bg-slate-950/80 text-slate-300 border border-slate-700 text-[9px] px-1.5 py-0.5 rounded-md font-bold backdrop-blur-sm z-10">
+              🙈 非表示中
+            </span>
+          ` : ''}
+          <button onclick="openMemberModal(${m.id})" class="absolute top-2 right-2 bg-slate-950/80 hover:bg-pink-600 text-white text-[10px] px-2 py-1 rounded-lg border border-slate-700 backdrop-blur-sm transition z-10">
             ✏️ 編集
           </button>
           ${isGrad ? '<span class="absolute bottom-2 left-2 bg-slate-950/80 text-gray-400 text-[9px] px-1.5 py-0.5 rounded border border-slate-700">卒業/離籍</span>' : ''}
@@ -141,42 +191,82 @@ function renderMembers(filteredList = null) {
 
 // 複合フィルター処理
 window.filterMembers = function() {
-  const keyword = document.getElementById('search-input')?.value.toLowerCase() || '';
+  // 各種フィルタ値の取得
+  const keyword = document.getElementById('search-input')?.value.toLowerCase().trim() || '';
   const groupVal = document.getElementById('group-filter')?.value || '';
   const categoryVal = document.getElementById('category-filter')?.value || '';
   const prefectureVal = document.getElementById('prefecture-filter')?.value || '';
+  const sortVal = document.getElementById('sort-filter')?.value || 'name_asc';
+  const visibilityVal = document.getElementById('visibility-filter')?.value || 'visible';
   
   const showActive = document.getElementById('status-active-chk')?.checked;
   const showGraduated = document.getElementById('status-graduated-chk')?.checked;
 
-  const filtered = allMembers.filter(m => {
+  let filtered = allMembers.filter(m => {
     const g = m.groups ? allGroups.find(x => x.id === m.group_id) : null;
 
-    // 💡 優先判定ロジック: 個人の設定があれば最優先、無ければグループの設定を参照
     const effectiveCategory = m.category || (g ? g.category : '');
     const effectivePrefecture = m.prefecture || (g ? g.prefecture : '');
 
     // 1. キーワード検索
-    const matchKey = m.name.toLowerCase().includes(keyword) || 
-                     (m.ruby && m.ruby.toLowerCase().includes(keyword)) || 
-                     (m.groups && m.groups.name.toLowerCase().includes(keyword));
+    const nameStr = (m.name || '').toLowerCase();
+    const rubyStr = (m.ruby || '').toLowerCase();
+    const groupStr = (m.groups?.name || '').toLowerCase();
+    const matchKey = nameStr.includes(keyword) || rubyStr.includes(keyword) || groupStr.includes(keyword);
 
-    // 2. グループ指定
+    // 2. グループ・区分・拠点・ステータス判定
     const matchGroup = !groupVal || String(m.group_id) === groupVal;
-
-    // 3. 区分指定（実効値で判定）
     const matchCategory = !categoryVal || effectiveCategory === categoryVal;
-
-    // 4. 拠点指定（実効値で判定）
     const matchPrefecture = !prefectureVal || effectivePrefecture === prefectureVal;
 
-    // 5. ステータス判定
     const status = m.status || 'active';
     let matchStatus = false;
     if (status === 'active' && showActive) matchStatus = true;
     if (status === 'graduated' && showGraduated) matchStatus = true;
 
-    return matchKey && matchGroup && matchCategory && matchPrefecture && matchStatus;
+    // 💡 3. 表示設定（is_hidden）フィルタ判定
+    // デフォルト（選択なし、または visible）のときは「表示(is_hidden === false)」のみ抽出
+    // "hidden" のときは「非表示(is_hidden === true)」のみ抽出
+    // "all" 等を追加する場合は全件ヒット
+    const isHidden = m.is_hidden ?? false;
+    let matchVisibility = true;
+    
+    if (visibilityVal === 'visible') {
+      matchVisibility = !isHidden; // 表示対象のみ
+    } else if (visibilityVal === 'hidden') {
+      matchVisibility = isHidden;  // 非表示のみ
+    } else if (visibilityVal === '') {
+      // 💡 未選択時のデフォルト挙動：基本は「表示対象のみ」を表示したい場合
+      matchVisibility = !isHidden; 
+    }
+
+    return matchKey && matchGroup && matchCategory && matchPrefecture && matchStatus && matchVisibility;
+  });
+
+  // ソート処理
+  filtered.sort((a, b) => {
+    switch (sortVal) {
+      case 'name_asc': {
+        const rubyA = a.ruby || a.name || '';
+        const rubyB = b.ruby || b.name || '';
+        return rubyA.localeCompare(rubyB, 'ja');
+      }
+      case 'group_asc': {
+        const groupA = a.groups?.name || 'ZZZ';
+        const groupB = b.groups?.name || 'ZZZ';
+        const groupCompare = groupA.localeCompare(groupB, 'ja');
+        if (groupCompare !== 0) return groupCompare;
+        const rubyA = a.ruby || a.name || '';
+        const rubyB = b.ruby || b.name || '';
+        return rubyA.localeCompare(rubyB, 'ja');
+      }
+      case 'created_desc':
+        return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+      case 'created_asc':
+        return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+      default:
+        return 0;
+    }
   });
 
   renderMembers(filtered);
@@ -222,25 +312,35 @@ function renderGroups() {
 // 4. 表示/非表示（アクティブ選択）一覧描画
 function renderActiveManagement() {
   const container = document.getElementById('active-management-list');
-  if (allGroups.length === 0) {
+  if (!container) return;
+
+  if (!allGroups || allGroups.length === 0) {
     container.innerHTML = '<div class="text-center py-8 text-xs text-slate-500">グループを登録すると表示設定が可能になります</div>';
     return;
   }
 
   container.innerHTML = allGroups.map(g => {
-    const groupMembers = allMembers.filter(m => m.group_id === g.id);
-    const membersHtml = groupMembers.map(m => `
-      <label class="flex items-center space-x-2 p-2 bg-slate-950/60 rounded-xl border border-slate-800/60 cursor-pointer hover:border-slate-700 transition">
-        <input type="checkbox" ${m.is_active !== false ? 'checked' : ''} onchange="toggleMemberActive(${m.id}, this.checked)" class="accent-pink-500 rounded">
-        <span class="text-xs font-bold text-slate-200 truncate">${m.name}</span>
-      </label>
-    `).join('');
+    // 該当グループのメンバー一覧
+    const groupMembers = allMembers.filter(m => String(m.group_id) === String(g.id));
+    
+    // グループ内のメンバー全員が表示状態（is_hidden が false または未定義）ならグループチェックON
+    const isGroupAllVisible = groupMembers.length > 0 && groupMembers.every(m => !m.is_hidden);
+
+    const membersHtml = groupMembers.map(m => {
+      const isVisible = !m.is_hidden; // is_hidden が false のとき「表示(ON)」
+      return `
+        <label class="flex items-center space-x-2 p-2 bg-slate-950/60 rounded-xl border border-slate-800/60 cursor-pointer hover:border-slate-700 transition">
+          <input type="checkbox" ${isVisible ? 'checked' : ''} onchange="toggleUserMemberVisibility('${m.id}', !this.checked)" class="accent-pink-500 rounded">
+          <span class="text-xs font-bold text-slate-200 truncate">${m.name}</span>
+        </label>
+      `;
+    }).join('');
 
     return `
       <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 space-y-3">
         <div class="flex justify-between items-center border-b border-slate-800 pb-2">
           <label class="flex items-center space-x-2 cursor-pointer">
-            <input type="checkbox" ${g.is_active !== false ? 'checked' : ''} onchange="toggleGroupActive(${g.id}, this.checked)" class="accent-purple-500 rounded">
+            <input type="checkbox" ${isGroupAllVisible ? 'checked' : ''} onchange="toggleUserGroupVisibility('${g.id}', !this.checked)" class="accent-purple-500 rounded">
             <span class="font-black text-sm text-purple-400">${g.name}</span>
           </label>
           <span class="text-[10px] text-slate-500">${groupMembers.length}名</span>
@@ -251,6 +351,93 @@ function renderActiveManagement() {
       </div>
     `;
   }).join('');
+}
+
+/**
+ * 💡 単一メンバーのオンメモリ切り替え（DB保存は保存ボタン押下時）
+ */
+function toggleUserMemberVisibility(memberId, newIsHidden) {
+  const member = allMembers.find(m => String(m.id) === String(memberId));
+  if (member) {
+    member.is_hidden = newIsHidden;
+  }
+  
+  // TAB 1 等のフィルタ一覧をリアルタイム同期
+  if (typeof filterMembers === 'function') filterMembers();
+}
+
+/**
+ * 💡 グループ一括のオンメモリ切り替え（DB保存は保存ボタン押下時）
+ */
+function toggleUserGroupVisibility(groupId, newIsHidden) {
+  const groupMembers = allMembers.filter(m => String(m.group_id) === String(groupId));
+  groupMembers.forEach(m => {
+    m.is_hidden = newIsHidden;
+  });
+
+  // UI（メンバー個別のチェックボックス表示）を再描画して一致させる
+  renderActiveManagement();
+  
+  // TAB 1 等のフィルタ一覧をリアルタイム同期
+  if (typeof filterMembers === 'function') filterMembers();
+}
+
+/**
+ * 💡 保存ボタン押下時：全メンバーの表示設定を Supabase へ一括保存
+ */
+async function saveUserMemberSettings() {
+  const user = (await supabase.auth.getUser())?.data?.user;
+  if (!user) {
+    if (typeof showToast === 'function') {
+      showToast('ログインが必要です', 'error');
+    }
+    return;
+  }
+
+  // 保存対象データの準備
+  const upsertData = allMembers.map(m => ({
+    user_id: user.id,
+    member_id: m.id,
+    is_hidden: m.is_hidden ?? false
+  }));
+
+  if (upsertData.length === 0) {
+    if (typeof showToast === 'function') {
+      showToast('保存対象のメンバーがいません', 'warning');
+    }
+    return;
+  }
+
+  // 💡 汎用確認ダイアログの表示
+  const isConfirmed = await window.showConfirmModal({
+    title: '表示設定の保存',
+    message: '現在のプレイ用表示設定（ON/OFF）を保存しますか？',
+    confirmText: '保存する',
+    cancelText: 'キャンセル',
+    type: 'info',
+    showCancel: true
+  });
+
+  // キャンセルされた場合は処理を中断
+  if (!isConfirmed) return;
+
+  // Supabase へ 1リクエストでまとめて一括 upsert
+  const { error } = await supabase
+    .from('user_member_settings')
+    .upsert(upsertData, {
+      onConflict: 'user_id,member_id'
+    });
+
+  if (error) {
+    console.error('表示設定の保存に失敗:', error);
+    if (typeof showToast === 'function') {
+      showToast('表示設定の保存に失敗しました', 'error');
+    }
+  } else {
+    if (typeof showToast === 'function') {
+      showToast('表示設定を保存しました！', 'success');
+    }
+  }
 }
 
 async function toggleGroupActive(groupId, isActive) {
@@ -582,3 +769,24 @@ function switchTab(tab) {
   const activeBtn = document.getElementById(`tab-btn-${tab}`);
   activeBtn.className = "pb-3 px-4 border-b-2 border-pink-500 text-pink-400 transition font-bold";
 }
+
+/**
+ * 絞り込み詳細パネルの開閉トグル
+ */
+function toggleFilterPanel() {
+  const panel = document.getElementById('filter-details-panel');
+  const icon = document.getElementById('filter-arrow-icon');
+  
+  if (!panel || !icon) return;
+
+  const isHidden = panel.classList.contains('hidden');
+
+  if (isHidden) {
+    panel.classList.remove('hidden');
+    icon.style.transform = 'rotate(0deg)';
+  } else {
+    panel.classList.add('hidden');
+    icon.style.transform = 'rotate(-90deg)';
+  }
+}
+
