@@ -355,9 +355,15 @@ function removeWall(wallId) {
 function addTierRow() {
   const newId = `tier-${Date.now()}`;
   defaultTiers.push({ id: newId, name: 'NEW', color: '#7f8c8d', textColor: '#ffffff' });
+  // 1. ランク枠を再生成
   renderTierBoard();
+  // 2. カード（HTML要素）を再描画・生成 💡これが抜けていました
+  renderPool();
+  // 🔍 デバッグログを追加
+  console.log('配置情報 (memberPositions):', memberPositions);
+  console.log('取得できたカード要素数:', document.querySelectorAll('.member-card').length); // クラス名は実際のカードのクラス名に合わせて変更してください
+  // 3. 各カードを記憶されている位置（Tier枠またはプール）へ再配置
   restoreCardPositions();
-  
 }
 
 function updateTierName(tierId, newName) {
@@ -384,26 +390,43 @@ function updateTierColor(tierId, newColor) {
 }
 
 function deleteTierRow(tierId) {
+  // 削除対象ランクにいたメンバーを未配置（プール）に戻す
   Object.keys(memberPositions).forEach(mId => {
     if (memberPositions[mId] === tierId) delete memberPositions[mId];
   });
-
   defaultTiers = defaultTiers.filter(x => x.id !== tierId);
+  // 1. ランク枠を再生成
   renderTierBoard();
+  // 2. カード（HTML要素）を再描画・生成
   renderPool();
-  
+  // 3. 各カードを記憶されている位置へ再配置
+  restoreCardPositions();
 }
 
 // ランク削除時などの位置復元用
 function restoreCardPositions() {
   Object.keys(memberPositions).forEach(mId => {
     const tierId = memberPositions[mId];
-    const cardEl = document.getElementById(`card-${mId}`);
+    let cardEl = document.getElementById(`card-${mId}`);
     const dropZone = document.getElementById(`drop-${tierId}`);
+
+    // 💡 cardEl が存在しない（Tier再描画で消えた）場合、カードを再生成して復元
+    if (!cardEl && dropZone) {
+      // allMembers (またはお使いのメンバー全件配列変数) から対象メンバーを取得
+      const member = allMembers?.find(m => String(m.id) === String(mId));
+      if (member && typeof createMemberCardHtml === 'function') {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = createMemberCardHtml(member);
+        cardEl = tempDiv.firstElementChild;
+      }
+    }
+
+    // ドロップゾーンが存在し、カードがまだ入っていない場合に挿入
     if (cardEl && dropZone && !dropZone.contains(cardEl)) {
       dropZone.appendChild(cardEl);
     }
   });
+
   updateCardHighlightStyles();
   saveDraftToLocalStorage();
 }
