@@ -72,3 +72,72 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
   `;
 });
+
+// ==========================================
+// トーストメッセージ ユーティリティ
+// ==========================================
+
+// トースト用コンテナの生成・初期化
+function initToastContainer() {
+  if (document.getElementById('toast-container')) return;
+
+  const container = document.createElement('div');
+  container.id = 'toast-container';
+  // 画面右上に固定表示（スマホ時は画面幅に合わせて中央寄り）
+  container.className = 'fixed top-5 right-5 z-50 flex flex-col gap-2 max-w-xs sm:max-w-sm w-full pointer-events-none px-4 sm:px-0';
+  document.body.appendChild(container);
+}
+
+/**
+ * トーストメッセージを表示する
+ * @param {string} message - 表示するメッセージ
+ * @param {'info'|'success'|'warning'|'error'} type - 通知タイプ (デフォルト: 'info')
+ * @param {number} duration - 表示時間(ms) (デフォルト: 3000ms)
+ */
+window.showToast = function(message, type = 'info', duration = 3000) {
+  initToastContainer();
+  const container = document.getElementById('toast-container');
+
+  // タイプごとのスタイル定義 (Tailwind CSS)
+  const typeStyles = {
+    info: 'bg-gray-800 border-gray-700 text-white',
+    success: 'bg-emerald-900/90 border-emerald-600 text-emerald-100',
+    warning: 'bg-amber-900/90 border-amber-600 text-amber-100',
+    error: 'bg-rose-900/90 border-rose-600 text-rose-100'
+  };
+
+  const icons = {
+    info: 'ℹ️',
+    success: '✅',
+    warning: '⚠️',
+    error: '🚨'
+  };
+
+  // トースト要素の作成
+  const toast = document.createElement('div');
+  toast.className = `flex items-center gap-3 px-4 py-3 rounded-lg border shadow-lg backdrop-blur-sm pointer-events-auto transform transition-all duration-300 opacity-0 translate-y-[-10px] ${typeStyles[type] || typeStyles.info}`;
+  
+  toast.innerHTML = `
+    <span class="text-base leading-none">${icons[type] || icons.info}</span>
+    <p class="text-sm font-medium flex-1 break-words">${message}</p>
+  `;
+
+  container.appendChild(toast);
+
+  // 1フレーム後にフェードイン表示
+  requestAnimationFrame(() => {
+    toast.classList.remove('opacity-0', 'translate-y-[-10px]');
+    toast.classList.add('opacity-100', 'translate-y-0');
+  });
+
+  // 自動消滅処理
+  setTimeout(() => {
+    toast.classList.remove('opacity-100', 'translate-y-0');
+    toast.classList.add('opacity-0', 'translate-y-[-10px]');
+
+    // アニメーション完了後に削除
+    toast.addEventListener('transitionend', () => {
+      toast.remove();
+    });
+  }, duration);
+};

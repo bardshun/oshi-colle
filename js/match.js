@@ -21,7 +21,7 @@ async function startGame() {
     .select(`*, groups(name), member_images(image_url, is_default)`);
 
   if (error || !data || data.length === 0) {
-    alert('メンバーが登録されていません。まずは管理画面でメンバーを登録してください！');
+    showToast('メンバーが登録されていません。まずは管理画面でメンバーを登録してください！', 'warning');
     return;
   }
 

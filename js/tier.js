@@ -8,14 +8,16 @@ let defaultTiers = [
 ];
 
 let allMembers = [];
+let allGroups = [];
 let memberPositions = {}; // { memberId: tierId }
 let wallCount = 0; // ランク上に生成された「壁」のカウンター
 let selectedMemberData = null; // タップ選択中のアイテム情報 { id: '...' }
+let currentSortKey = 'ruby'; 
+let isSortAsc = true; // true: 昇順 (▲) / false: 降順 (▼)
 
 document.addEventListener('DOMContentLoaded', async () => {
-  renderTierBoard();
-  await loadTierMembers();
-  loadGroupsFilter();
+  renderTierBoard();     // ボード初期表示
+  await loadTierMembers(); // メンバー・グループ取得 ➔ フィルター初期化 ➔ プール描画を一括実行
 });
 
 // 1. Tierボードのレンダリング
@@ -51,22 +53,41 @@ function renderTierBoard() {
   `).join('');
 }
 
-// 2. Supabaseからメンバー＆画像取得
+// 2. Supabaseからメンバー＆グループ＆画像情報を一括取得
 async function loadTierMembers() {
-  console.log('メンバーデータの読み込みを開始します...');
-  const { data, error } = await supabase
-    .from('members')
-    .select(`*, groups(name), member_images(image_url, is_default)`)
-    .order('name');
+  console.log('データの読み込みを開始します...');
 
-  if (error) {
-    console.error('メンバー取得失敗:', error);
-    return;
+  try {
+    // members と groups を同時に並行取得
+    const [membersRes, groupsRes] = await Promise.all([
+      supabase
+        .from('members')
+        .select(`*, groups(id, name, prefecture, category), member_images(image_url, is_default)`)
+        .order('name'),
+      supabase
+        .from('groups')
+        .select(`*`)
+        .order('name')
+    ]);
+
+    if (membersRes.error) console.error('メンバー取得エラー:', membersRes.error);
+    if (groupsRes.error) console.error('グループ取得エラー:', groupsRes.error);
+
+    // グローバル変数へ格納
+    allMembers = membersRes.data || [];
+    allGroups = groupsRes.data || [];
+
+    console.log(`取得完了: メンバー ${allMembers.length}件 / グループ ${allGroups.length}件`);
+
+    // 💡 取得完了後にフィルターの選択肢（拠点・グループ・区分）を初期化
+    setupTierFilters(allMembers, allGroups);
+
+    // プールエリアの描画
+    renderPool();
+
+  } catch (err) {
+    console.error('データ読込例外エラー:', err);
   }
-
-  console.log(`メンバーデータ取得完了: ${data ? data.length : 0}件`);
-  allMembers = data || [];
-  renderPool();
 }
 
 // 3. グループフィルターの初期化
@@ -84,24 +105,125 @@ async function loadGroupsFilter() {
   }
 }
 
-// 4. プールエリアの描画（無限「壁」カードを常時先頭に配置）
+// 4. プールエリアの描画（無限「壁」カードを常時先頭に配置＋拠点・区分フィルター対応）
+/**
+ * ソートボタンのタップイベント処理
+ * @param {string} key - 'ruby' または 'group'
+ */
+window.toggleSort = function(key) {
+  if (currentSortKey === key) {
+    // 同じボタンを押し込み ➔ 昇順/降順を反転
+    isSortAsc = !isSortAsc;
+  } else {
+    // 別のボタンを押し込み ➔ キーを変更して昇順からスタート
+    currentSortKey = key;
+    isSortAsc = true;
+  }
+
+  // ボタンの見た目（矢印アイコン等）を更新
+  updateSortUI();
+
+  // プール領域を再描画
+  renderPool();
+};
+
+/**
+ * ソートボタンのアイコンや表示スタイルを更新
+ */
+function updateSortUI() {
+  const rubyBtn = document.getElementById('sort-ruby-btn');
+  const groupBtn = document.getElementById('sort-group-btn');
+  const rubyIcon = document.getElementById('sort-ruby-icon');
+  const groupIcon = document.getElementById('sort-group-icon');
+
+  const arrow = isSortAsc ? '▲' : '▼';
+
+  if (rubyIcon && groupIcon) {
+    rubyIcon.textContent = currentSortKey === 'ruby' ? arrow : '▼';
+    groupIcon.textContent = currentSortKey === 'group' ? arrow : '▼';
+  }
+
+  // アクティブなボタンのハイライト
+  if (rubyBtn && groupBtn) {
+    if (currentSortKey === 'ruby') {
+      rubyBtn.classList.add('border-pink-500', 'text-pink-400');
+      groupBtn.classList.remove('border-pink-500', 'text-pink-400');
+    } else {
+      groupBtn.classList.add('border-pink-500', 'text-pink-400');
+      rubyBtn.classList.remove('border-pink-500', 'text-pink-400');
+    }
+  }
+}
+
+/**
+ * プール描画関数 (ソート適用版)
+ */
 function renderPool() {
   const poolEl = document.getElementById('member-pool');
   if (!poolEl) return;
-  const filterGroup = document.getElementById('tier-group-filter')?.value;
 
-  const unplaced = allMembers.filter(m => {
-    const isPlaced = !!memberPositions[m.id];
-    const matchGroup = !filterGroup || String(m.group_id) === filterGroup;
-    return !isPlaced && matchGroup;
+  const selectedBranch = document.getElementById('tier-branch-filter')?.value || '';
+  const selectedGroup = document.getElementById('tier-group-filter')?.value || '';
+  const selectedCategory = document.getElementById('tier-category-filter')?.value || '';
+
+  const groupMap = new Map(allGroups.map(g => [String(g.id), g]));
+
+  // 1. 未配置かつフィルターに合致するメンバーを抽出
+  let unplaced = allMembers.filter(m => {
+    if (memberPositions[m.id]) return false;
+
+    const group = m.group_id ? groupMap.get(String(m.group_id)) : null;
+
+    if (selectedBranch) {
+      const matchMemberBranch = m.prefecture === selectedBranch;
+      const matchGroupBranch = group && group.prefecture === selectedBranch;
+      if (!matchMemberBranch && !matchGroupBranch) return false;
+    }
+
+    if (selectedGroup) {
+      if (selectedGroup === 'unassigned') {
+        if (m.group_id) return false;
+      } else {
+        if (String(m.group_id) !== selectedGroup) return false;
+      }
+    }
+
+    if (selectedCategory) {
+      const matchMemberCategory = m.category === selectedCategory;
+      const matchGroupCategory = group && group.category === selectedCategory;
+      if (!matchMemberCategory && !matchGroupCategory) return false;
+    }
+
+    return true;
   });
 
+  // 2. 💡 ソート処理の適用
+  unplaced.sort((a, b) => {
+    let valA = '';
+    let valB = '';
+
+    if (currentSortKey === 'ruby') {
+      // ふりがな（なければ名前）で比較
+      valA = a.ruby || a.name || '';
+      valB = b.ruby || b.name || '';
+    } else if (currentSortKey === 'group') {
+      // グループ名（なければ「無所属」）で比較
+      const groupA = a.group_id ? groupMap.get(String(a.group_id)) : null;
+      const groupB = b.group_id ? groupMap.get(String(b.group_id)) : null;
+      valA = groupA ? (groupA.name || '') : 'んんん'; // 無所属を一番最後に持ってくるため「んんん」を代替値に
+      valB = groupB ? (groupB.name || '') : 'んんん';
+    }
+
+    const comp = valA.localeCompare(valB, 'ja');
+    return isSortAsc ? comp : -comp;
+  });
+
+  // 3. 件数表示
   const countEl = document.getElementById('pool-count');
   if (countEl) countEl.innerText = `${unplaced.length}名`;
 
+  // 4. カードDOM生成（壁カード ＋ メンバーカード）
   const isWallSelected = selectedMemberData && selectedMemberData.id === 'wall';
-
-  // 1番目に常時「無限の壁カード」を置く（タップ選択対応）
   const wallCardHtml = `
     <div id="wall-template" draggable="true" 
          ondragstart="dragStart(event, 'wall')" 
@@ -272,13 +394,11 @@ function restoreCardPositions() {
   updateCardHighlightStyles();
 }
 
-
-function filterPoolMembers() {
+window.filterPoolMembers = function() {
   renderPool();
-}
+};
 
-// 7. Tier表 全体プレビュー ＆ 画像保存処理 (横スクロール対応・カード10個分確保版)
-// 7. Tier表 全体プレビュー ＆ 画像保存処理 (全体一体化 ＆ 横長一括スクロール版)
+// 7. Tier表 全体プレビュー ＆ 画像保存処理 (出力時は画像のみカードに変換版)
 window.openTierPreviewModal = function() {
   console.log('Tier表プレビューモーダルを開きます');
   const exportTarget = document.getElementById('tier-export-target');
@@ -287,7 +407,7 @@ window.openTierPreviewModal = function() {
     return;
   }
 
-  // 💡 外枠自体が最小950pxまで綺麗に拡大するスタイル
+  // 外枠の指定
   exportTarget.className = "w-max min-w-[950px] bg-gray-900 p-4 rounded-xl border border-gray-800 space-y-2 shadow-2xl";
 
   // ドロップゾーンから現在のカード・壁のノードをクローンして描画
@@ -308,7 +428,7 @@ window.openTierPreviewModal = function() {
               ${tier.name}
             </div>
 
-            <!-- ドロップエリア (1行固定表示) -->
+            <!-- ドロップエリア -->
             <div class="flex-1 p-2 flex flex-nowrap items-center gap-2 bg-gray-900/80">
               ${clonedChildrenHtml || '<span class="text-xs text-gray-600 pl-2">なし</span>'}
             </div>
@@ -318,7 +438,26 @@ window.openTierPreviewModal = function() {
     </div>
   `;
 
-  // 不要な削除ボタンや編集用UIの非表示処理（クローン要素内）
+  // 💡 クローン内部（出力対象）のカードだけスタイルを自動書き換え
+  exportTarget.querySelectorAll('[id^="card-"]').forEach(card => {
+    // 1. カード内のテキストエリア（名前）を非表示
+    const textWrapper = card.querySelector('div');
+    if (textWrapper) textWrapper.style.display = 'none';
+
+    // 2. 画像をカード全体（100%）に引き伸ばして角丸フィット
+    const img = card.querySelector('img');
+    if (img) {
+      img.style.height = '100%';
+      img.style.width = '100%';
+      img.style.objectFit = 'cover';
+    }
+
+    // 3. 枠線の微調整（必要に応じて）
+    card.style.height = '70px'; // モーダル出力時のカード高さを固定
+    card.style.width = '56px';  // モーダル出力時のカード幅を固定
+  });
+
+  // 不要な削除ボタン等の非表示処理
   exportTarget.querySelectorAll('button').forEach(btn => btn.style.display = 'none');
 
   const modal = document.getElementById('tier-preview-modal');
@@ -335,7 +474,7 @@ window.closeTierPreviewModal = function() {
 window.downloadTierImage = async function() {
   const exportTarget = document.getElementById('tier-export-target');
   if (!exportTarget) {
-    alert('保存対象エリアが見つかりません');
+    showToast('保存対象エリアが見つかりません', 'warning');
     return;
   }
 
@@ -389,7 +528,7 @@ window.downloadTierImage = async function() {
 
   } catch (err) {
     console.error('画像保存エラー:', err);
-    alert('画像の保存に失敗しました。');
+    showToast('画像の保存に失敗しました。', 'error');
   } finally {
     if (saveBtn) {
       saveBtn.innerText = originalText;
@@ -523,5 +662,134 @@ function updateCardHighlightStyles() {
     } else {
       wallEl.className = "w-16 h-20 sm:w-20 sm:h-24 bg-black text-white border-2 border-gray-600 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-red-500 transition flex-shrink-0 select-none shadow relative group";
     }
+  });
+}
+
+// 未配置プール領域クリック時（ランクからタップ移動で未配置に戻す）
+/**
+ * プール領域（余白）クリック時のハンドラー
+ * ランク上の選択中カードを物理削除してプールに復帰させる
+ */
+window.handlePoolClick = function(e) {
+  // カード本体（メンバーカードや壁カード）のタップ時はそれぞれのクリック処理に委ねるため除外
+  if (e.target.closest('[id^="card-"]') || e.target.closest('#wall-template')) return;
+
+  if (selectedMemberData && selectedMemberData.id !== 'wall') {
+    const rawId = selectedMemberData.id;
+    const numId = Number(rawId);
+    const strId = String(rawId);
+
+    const hasNumKey = memberPositions.hasOwnProperty(numId);
+    const hasStrKey = memberPositions.hasOwnProperty(strId);
+
+    if (hasNumKey || hasStrKey) {
+      // 1. データ上の配置位置を削除
+      delete memberPositions[numId];
+      delete memberPositions[strId];
+
+      // 2. 💡 Tier表（ランク内）に存在するカードのDOM要素を物理的に削除
+      const existingTierCards = document.querySelectorAll(
+        `#tier-container [id$="${strId}"], #tier-container [data-id="${strId}"]`
+      );
+      existingTierCards.forEach(el => el.remove());
+
+      // 3. 選択状態を完全に解除
+      selectedMemberData = null;
+
+      // 4. 未配置プールを再描画（カードがプールに復活する）
+      renderPool();
+
+      // 5. ハイライト枠（ピンク色の枠）を更新
+      if (typeof updateCardHighlightStyles === 'function') {
+        updateCardHighlightStyles();
+      }
+
+      if (typeof showToast === 'function') {
+        console.log('選択したメンバーを未配置に戻しました', 'info');
+      }
+    }
+  }
+};
+
+/**
+ * 拠点・グループ・区分のセレクトボックス選択肢を動的生成
+ * @param {Array} members - membersテーブルから取得したデータ
+ * @param {Array} groups - groupsテーブルから取得したデータ
+ */
+function setupTierFilters(members, groups = []) {
+  allGroups = groups;
+
+  const branchSelect = document.getElementById('tier-branch-filter');
+  const categorySelect = document.getElementById('tier-category-filter');
+
+  // 1. 拠点の抽出 (groups.prefecture ＋ members.prefecture)
+  if (branchSelect) {
+    const branches = new Set();
+    groups.forEach(g => { if (g.prefecture) branches.add(g.prefecture); });
+    members.forEach(m => { if (m.prefecture) branches.add(m.prefecture); });
+
+    branchSelect.innerHTML = '<option value="">🌐 すべての拠点</option>';
+    Array.from(branches).sort().forEach(b => {
+      const opt = document.createElement('option');
+      opt.value = b;
+      opt.textContent = b;
+      branchSelect.appendChild(opt);
+    });
+  }
+
+  // 2. グループセレクトボックスの初期化（「無所属」を含む）
+  updateGroupOptions();
+
+  // 3. 区分の抽出 (members.category ＋ groups.category)
+  if (categorySelect) {
+    const categories = new Set();
+    members.forEach(m => { if (m.category) categories.add(m.category); });
+    groups.forEach(g => { if (g.category) categories.add(g.category); });
+
+    categorySelect.innerHTML = '<option value="">🏷️ すべての区分</option>';
+    Array.from(categories).sort().forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      categorySelect.appendChild(opt);
+    });
+  }
+}
+
+/**
+ * 拠点選択の変更イベントハンドラー
+ */
+window.handleBranchChange = function() {
+  updateGroupOptions();
+  filterPoolMembers();
+};
+
+/**
+ * 選択された拠点に応じてグループ選択肢を絞り込み（無所属を含む）
+ */
+function updateGroupOptions() {
+  const selectedBranch = document.getElementById('tier-branch-filter')?.value || '';
+  const groupSelect = document.getElementById('tier-group-filter');
+  if (!groupSelect) return;
+
+  groupSelect.innerHTML = '<option value="">🏢 すべてのグループ</option>';
+
+  // 常時「無所属」の選択肢を追加
+  const unassignedOpt = document.createElement('option');
+  unassignedOpt.value = 'unassigned';
+  unassignedOpt.textContent = '❓ 無所属';
+  groupSelect.appendChild(unassignedOpt);
+
+  // 拠点に基づくグループの抽出
+  let filteredGroups = allGroups;
+  if (selectedBranch) {
+    filteredGroups = allGroups.filter(g => g.prefecture === selectedBranch);
+  }
+
+  filteredGroups.forEach(g => {
+    const opt = document.createElement('option');
+    opt.value = String(g.id);       // IDを数値文字列として保持
+    opt.textContent = g.name || ''; // 表示はグループ名
+    groupSelect.appendChild(opt);
   });
 }

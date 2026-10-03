@@ -316,9 +316,9 @@ async function pasteFromClipboard(target = null) {
         return;
       }
     }
-    alert('クリップボードに画像が見つかりませんでした');
+    showToast('クリップボードに画像が見つかりませんでした', 'warning');
   } catch (err) {
-    alert('クリップボードの読み取り権限を許可してください');
+    showToast('クリップボードの読み取り権限を許可してください', 'warning');
   }
 }
 
@@ -499,7 +499,7 @@ window.saveMember = async function(e) {
     await loadAllData();
   } catch (err) {
     console.error('メンバー保存エラー:', err);
-    alert('保存に失敗しました: ' + (err.message || 'エラーが発生しました'));
+    showToast('保存に失敗しました: ' + (err.message || 'エラーが発生しました'), 'error');
   } finally {
     if (saveBtn) {
       saveBtn.disabled = false;
@@ -560,7 +560,7 @@ window.saveGroup = async function(e) {
     await loadAllData();
   } catch (err) {
     console.error('グループ保存エラー:', err);
-    alert('保存に失敗しました: ' + (err.message || 'エラーが発生しました'));
+    showToast('保存に失敗しました: ' + (err.message || 'エラーが発生しました'), 'error');
   } finally {
     // 処理終了後にボタン状態を復元
     if (saveBtn) {
