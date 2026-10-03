@@ -11,7 +11,7 @@
   <!-- html2canvas (画像保存用) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
-<body class="bg-gray-900 text-white h-screen flex flex-col overflow-hidden">
+<body class="bg-gray-900 text-white h-[100dvh] flex flex-col overflow-hidden">
   
   <!-- 全画面共通ヘッダー（スマホで絶対1行に収める最適化） -->
   <header class="bg-gray-800 border-b border-gray-700 px-2 sm:px-4 py-2 sticky top-0 z-50 shrink-0">
@@ -34,8 +34,8 @@
     </div>
   </header>
 
-  <!-- メインコンテンツ (残りの画面高さを自動で100%占有 ＆ 上下6:4分割) -->
-  <main class="max-w-4xl mx-auto p-3 flex flex-col flex-1 min-h-0 w-full space-y-3 overflow-hidden">
+  <!-- 💡 メインコンテンツエリア -->
+  <main class="max-w-4xl mx-auto p-2.5 sm:p-4 pb-3 flex flex-col flex-1 min-h-0 w-full space-y-2.5 overflow-hidden">
     
     <!-- Tier表メインボード (上半部: 比率6 / 内部スクロール) -->
     <div class="flex-[6] min-h-0 flex flex-col bg-black/40 p-2.5 rounded-xl border border-gray-800 overflow-hidden shadow-inner">
