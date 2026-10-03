@@ -20,6 +20,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 // 1. Tierボードのレンダリング
 function renderTierBoard() {
   const container = document.getElementById('tier-container');
+  if (!container) {
+    console.error('tier-container が見つかりません');
+    return;
+  }
   container.innerHTML = defaultTiers.map((tier) => `
     <div id="${tier.id}" class="tier-row flex border border-gray-800 rounded-lg overflow-hidden bg-gray-900 min-h-[90px]">
       
@@ -48,6 +52,7 @@ function renderTierBoard() {
 
 // 2. Supabaseからメンバー＆画像取得
 async function loadTierMembers() {
+  console.log('メンバーデータの読み込みを開始します...');
   const { data, error } = await supabase
     .from('members')
     .select(`*, groups(name), member_images(image_url, is_default)`)
@@ -58,13 +63,18 @@ async function loadTierMembers() {
     return;
   }
 
+  console.log(`メンバーデータ取得完了: ${data ? data.length : 0}件`);
   allMembers = data || [];
   renderPool();
 }
 
 // 3. グループフィルターの初期化
 async function loadGroupsFilter() {
-  const { data } = await supabase.from('groups').select('*').order('name');
+  const { data, error } = await supabase.from('groups').select('*').order('name');
+  if (error) {
+    console.error('グループフィルター取得失敗:', error);
+    return;
+  }
   const select = document.getElementById('tier-group-filter');
   if (data && select) {
     data.forEach(g => {
@@ -76,6 +86,7 @@ async function loadGroupsFilter() {
 // 4. プールエリアの描画（無限「壁」カードを常時先頭に配置）
 function renderPool() {
   const poolEl = document.getElementById('member-pool');
+  if (!poolEl) return;
   const filterGroup = document.getElementById('tier-group-filter')?.value;
 
   const unplaced = allMembers.filter(m => {
@@ -84,7 +95,8 @@ function renderPool() {
     return !isPlaced && matchGroup;
   });
 
-  document.getElementById('pool-count').innerText = `${unplaced.length}名`;
+  const countEl = document.getElementById('pool-count');
+  if (countEl) countEl.innerText = `${unplaced.length}名`;
 
   // 1番目に常時「無限の壁カード」を置く
   const wallCardHtml = `
@@ -238,3 +250,72 @@ function restoreCardPositions() {
 function filterPoolMembers() {
   renderPool();
 }
+
+// 7. Tier表 全体プレビュー ＆ 画像保存処理 (新規追加)
+window.openTierPreviewModal = function() {
+  console.log('Tier表プレビューモーダルを開きます');
+  const exportTarget = document.getElementById('tier-export-target');
+  if (!exportTarget) {
+    console.error('tier-export-target エレメントが見つかりません');
+    return;
+  }
+
+  // ドロップゾーンから現在のカード・壁のノードをクローンして綺麗に描画
+  exportTarget.innerHTML = `
+    <div class="text-center pb-2 mb-3 border-b border-gray-800">
+      <h2 class="text-xl font-black text-pink-500 tracking-wider">OFFICIAL TIER LIST</h2>
+    </div>
+    <div class="space-y-2">
+      ${defaultTiers.map(tier => {
+        const dropZone = document.getElementById(`drop-${tier.id}`);
+        const clonedChildrenHtml = dropZone ? dropZone.innerHTML : '';
+
+        return `
+          <div class="flex items-stretch bg-gray-950 border border-gray-800 rounded-lg overflow-hidden min-h-[80px]">
+            <div class="w-20 sm:w-24 flex items-center justify-center font-black text-xl sm:text-2xl border-r border-gray-800 shrink-0 text-center p-2 select-none"
+                 style="background-color: ${tier.color}; color:${tier.textColor};">
+              ${tier.name}
+            </div>
+            <div class="flex-1 p-2 flex flex-wrap items-center gap-2 bg-gray-900/80">
+              ${clonedChildrenHtml || '<span class="text-xs text-gray-600 pl-2">なし</span>'}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  // 不要な削除ボタンや編集用UIの非表示処理（クローン要素内）
+  exportTarget.querySelectorAll('button').forEach(btn => btn.style.display = 'none');
+
+  const modal = document.getElementById('tier-preview-modal');
+  if (modal) modal.classList.remove('hidden');
+};
+
+window.closeTierPreviewModal = function() {
+  const modal = document.getElementById('tier-preview-modal');
+  if (modal) modal.classList.add('hidden');
+};
+
+// html2canvasによる高画質PNG画像出力処理
+window.downloadTierImage = async function() {
+  const target = document.getElementById('tier-export-target');
+  if (!target) return;
+
+  console.log('Tier表画像の生成を開始します...');
+  try {
+    const canvas = await html2canvas(target, {
+      backgroundColor: '#111827', // bg-gray-900
+      scale: 2 // 高解像度化
+    });
+
+    const link = document.createElement('a');
+    link.download = `tier-list_${new Date().toISOString().slice(0, 10)}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    console.log('Tier表画像のダウンロードが完了しました');
+  } catch (err) {
+    console.error('画像生成エラー:', err);
+    alert('画像の保存に失敗しました: ' + (err.message || 'エラーが発生しました'));
+  }
+};
