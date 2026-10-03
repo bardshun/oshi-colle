@@ -10,6 +10,7 @@ let defaultTiers = [
 let allMembers = [];
 let memberPositions = {}; // { memberId: tierId }
 let wallCount = 0; // ランク上に生成された「壁」のカウンター
+let selectedMemberData = null; // タップ選択中のアイテム情報 { id: '...' }
 
 document.addEventListener('DOMContentLoaded', async () => {
   renderTierBoard();
@@ -43,8 +44,8 @@ function renderTierBoard() {
       </div>
 
       <!-- ドロップエリア -->
-      <div id="drop-${tier.id}" ondrop="dropToTier(event, '${tier.id}')" ondragover="allowDrop(event)" 
-           class="tier-content flex-1 p-2 flex flex-wrap gap-2 items-center bg-gray-900/60 min-h-[90px]">
+      <div id="drop-${tier.id}" ondrop="dropToTier(event, '${tier.id}')" ondragover="allowDrop(event)" onclick="handleTierClick('${tier.id}')" 
+           class="tier-content flex-1 p-2 flex flex-wrap gap-2 items-center bg-gray-900/60 min-h-[90px] cursor-pointer">
       </div>
     </div>
   `).join('');
@@ -111,14 +112,17 @@ function renderPool() {
   poolEl.innerHTML = wallCardHtml + memberCardsHtml;
 }
 
-// メンバーカードHTML生成
+// メンバーカードHTML生成（タップ選択・強調対応）
 function createMemberCardHtml(m) {
   const defaultImg = m.member_images?.find(i => i.is_default) || m.member_images?.[0];
   const imgUrl = defaultImg ? defaultImg.image_url : 'https://via.placeholder.com/100?text=No+Img';
+  const isSelected = selectedMemberData && selectedMemberData.id === String(m.id);
 
   return `
-    <div id="card-${m.id}" draggable="true" ondragstart="dragStart(event, '${m.id}')" 
-         class="w-16 h-20 sm:w-20 sm:h-24 bg-gray-800 rounded-lg overflow-hidden border border-gray-700 cursor-grab active:cursor-grabbing hover:border-pink-500 flex flex-col flex-shrink-0 select-none shadow">
+    <div id="card-${m.id}" draggable="true" 
+         ondragstart="dragStart(event, '${m.id}')" 
+         onclick="handleCardClick(event, '${m.id}')"
+         class="w-16 h-20 sm:w-20 sm:h-24 bg-gray-800 rounded-lg overflow-hidden border ${isSelected ? 'border-pink-500 ring-4 ring-pink-500/80 scale-105 z-10 shadow-lg shadow-pink-500/30' : 'border-gray-700'} cursor-pointer hover:border-pink-500 flex flex-col flex-shrink-0 select-none shadow transition duration-150">
       <img src="${imgUrl}" alt="${m.name}" class="w-full h-12 sm:h-16 object-cover pointer-events-none">
       <div class="p-0.5 bg-gray-800 flex-1 flex items-center justify-center">
         <span class="text-[10px] text-gray-200 font-bold truncate text-center px-0.5 pointer-events-none">${m.name}</span>
@@ -136,6 +140,7 @@ function dragStart(e, itemData) {
   e.dataTransfer.setData('text/plain', itemData);
 }
 
+// 5. ドラッグ＆ドロップ処理（割り込み配置対応版）
 function dropToTier(e, tierId) {
   e.preventDefault();
   const data = e.dataTransfer.getData('text/plain');
@@ -144,8 +149,14 @@ function dropToTier(e, tierId) {
   const targetDropZone = document.getElementById(`drop-${tierId}`);
   if (!targetDropZone) return;
 
-  // 「壁」がドロップされた場合 ➔ 新しい壁エレメントを生成して配置
+  // 💡 ドロップ位置（どのカードの手前に落とされたか）を判定するロジック
+  const targetCard = e.target.closest('#member-pool > div, .tier-content > div');
+  
+  // 配置するエレメントの取得または生成
+  let elementToAppend = null;
+
   if (data === 'wall') {
+    // 新しい壁を生成
     wallCount++;
     const newWallId = `wall-placed-${wallCount}`;
     const newWallEl = document.createElement('div');
@@ -157,22 +168,23 @@ function dropToTier(e, tierId) {
       <span class="text-xl sm:text-2xl font-black">壁</span>
       <button onclick="removeWall('${newWallId}')" class="absolute top-1 right-1 text-xs text-gray-500 hover:text-red-500 font-bold opacity-0 group-hover:opacity-100 transition">✕</button>
     `;
-    targetDropZone.appendChild(newWallEl);
-    return;
+    elementToAppend = newWallEl;
+  } else if (data.startsWith('wall-placed-')) {
+    // 移動する既存の壁
+    elementToAppend = document.getElementById(data);
+  } else {
+    // 通常のメンバーカード
+    memberPositions[data] = tierId;
+    elementToAppend = document.getElementById(`card-${data}`);
   }
 
-  // 配置済みの壁を別のランクへ移動する場合
-  if (data.startsWith('wall-placed-')) {
-    const wallEl = document.getElementById(data);
-    if (wallEl) targetDropZone.appendChild(wallEl);
-    return;
-  }
+  if (!elementToAppend) return;
 
-  // 通常のメンバーカードを配置する場合
-  memberPositions[data] = tierId;
-  const cardEl = document.getElementById(`card-${data}`);
-  if (cardEl) {
-    targetDropZone.appendChild(cardEl);
+  // 💡 ドロップ先が特定のカードの上だった場合は手前に挿入、それ以外は末尾に追加
+  if (targetCard && targetDropZone.contains(targetCard) && targetCard !== elementToAppend) {
+    targetDropZone.insertBefore(elementToAppend, targetCard);
+  } else {
+    targetDropZone.appendChild(elementToAppend);
   }
 
   renderPool();
@@ -319,3 +331,93 @@ window.downloadTierImage = async function() {
     alert('画像の保存に失敗しました: ' + (err.message || 'エラーが発生しました'));
   }
 };
+
+// 共通の配置処理コアロジック（ドラッグ＆タップ共通）
+function executePlacement(data, tierId, targetCardElement) {
+  const targetDropZone = document.getElementById(`drop-${tierId}`);
+  if (!targetDropZone) return;
+
+  let elementToAppend = null;
+
+  if (data === 'wall') {
+    wallCount++;
+    const newWallId = `wall-placed-${wallCount}`;
+    const newWallEl = document.createElement('div');
+    newWallEl.id = newWallId;
+    newWallEl.draggable = true;
+    newWallEl.setAttribute('ondragstart', `dragStart(event, '${newWallId}')`);
+    newWallEl.setAttribute('onclick', `handleCardClick(event, '${newWallId}')`);
+    newWallEl.className = "w-16 h-20 sm:w-20 sm:h-24 bg-black text-white border-2 border-gray-600 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-red-500 transition flex-shrink-0 select-none shadow relative group";
+    newWallEl.innerHTML = `
+      <span class="text-xl sm:text-2xl font-black pointer-events-none">壁</span>
+      <button onclick="removeWall('${newWallId}')" class="absolute top-1 right-1 text-xs text-gray-500 hover:text-red-500 font-bold opacity-0 group-hover:opacity-100 transition">✕</button>
+    `;
+    elementToAppend = newWallEl;
+  } else if (data.startsWith('wall-placed-')) {
+    elementToAppend = document.getElementById(data);
+  } else {
+    memberPositions[data] = tierId;
+    elementToAppend = document.getElementById(`card-${data}`);
+  }
+
+  if (!elementToAppend) return;
+
+  // 割り込み挿入 or 末尾追加
+  if (targetCardElement && targetDropZone.contains(targetCardElement) && targetCardElement !== elementToAppend) {
+    targetDropZone.insertBefore(elementToAppend, targetCardElement);
+  } else {
+    targetDropZone.appendChild(elementToAppend);
+  }
+}
+
+// ドラッグ＆ドロップ処理（割り込み対応）
+function dropToTier(e, tierId) {
+  e.preventDefault();
+  const data = e.dataTransfer.getData('text/plain');
+  if (!data) return;
+
+  const targetCard = e.target.closest('#member-pool > div, .tier-content > div');
+  executePlacement(data, tierId, targetCard);
+  renderPool();
+}
+
+// カードタップ時の処理
+function handleCardClick(e, memberId) {
+  e.stopPropagation();
+
+  // すでに何か選択中の状態で、別のカードをタップした場合 ➔ そのカードの手前に割り込み配置
+  if (selectedMemberData && selectedMemberData.id !== String(memberId)) {
+    const targetCard = document.getElementById(`card-${memberId}`) || document.getElementById(memberId);
+    const targetDropZone = targetCard ? targetCard.parentElement : null;
+    
+    if (targetDropZone && targetDropZone.id.startsWith('drop-')) {
+      const tierId = targetDropZone.id.replace('drop-', '');
+      executePlacement(selectedMemberData.id, tierId, targetCard);
+      selectedMemberData = null;
+      renderPool();
+      restoreCardPositions();
+      return;
+    }
+  }
+
+  // 選択の切り替え（トグル）
+  if (selectedMemberData && selectedMemberData.id === String(memberId)) {
+    selectedMemberData = null;
+  } else {
+    selectedMemberData = { id: String(memberId) };
+  }
+
+  renderPool();
+  restoreCardPositions();
+}
+
+// ランクエリア（背景・空きスペース）タップ時の処理
+function handleTierClick(tierId) {
+  if (!selectedMemberData) return;
+
+  executePlacement(selectedMemberData.id, tierId, null);
+  selectedMemberData = null;
+  
+  renderPool();
+  restoreCardPositions();
+}
