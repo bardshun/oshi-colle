@@ -15,7 +15,14 @@
   <header class="bg-gray-800 border-b border-gray-700 p-4 sticky top-0 z-50">
     <div class="max-w-4xl mx-auto flex justify-between items-center">
       <h1 class="text-xl font-bold text-pink-500">💖 推しコレ</h1>
-      <span class="text-xs bg-gray-700 px-2 py-1 rounded text-gray-300">v1.0</span>
+      
+      <!-- ログイン中のユーザー表示 & ログアウトエリア（初期状態は非表示） -->
+      <div id="user-status-area" class="flex items-center gap-3 hidden">
+        <span id="user-email-display" class="text-xs text-gray-300 font-mono"></span>
+        <button onclick="handleLogout()" class="text-xs bg-gray-700 hover:bg-gray-600 border border-gray-600 text-gray-200 px-2.5 py-1 rounded transition">
+          ログアウト
+        </button>
+      </div>
     </div>
   </header>
 
@@ -26,43 +33,279 @@
       <p class="text-gray-400 text-sm">〜 オタク友達と語る好きな顔アプリ 〜</p>
     </div>
 
-    <!-- タブ切り替えボタン -->
-    <div class="flex border-b border-gray-700">
-      <button id="tab-app-btn" onclick="switchTab('app')" class="flex-1 py-3 text-center font-bold border-b-2 border-pink-500 text-pink-500 transition">
-        🎮 アプリ
-      </button>
-      <button id="tab-manage-btn" onclick="switchTab('manage')" class="flex-1 py-3 text-center font-bold border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition">
-        ⚙️ 管理
-      </button>
+    <!-- 🔒 認証カード (未ログイン時に表示) -->
+    <div id="auth-container" class="max-w-md mx-auto bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-xl">
+      <!-- ログイン / 新規登録 切り替えタブ -->
+      <div class="flex border-b border-gray-700 mb-6">
+        <button id="auth-tab-login" onclick="switchAuthMode('login')" class="flex-1 pb-2 font-bold text-center border-b-2 border-pink-500 text-pink-500 text-sm">
+          ログイン
+        </button>
+        <button id="auth-tab-signup" onclick="switchAuthMode('signup')" class="flex-1 pb-2 font-bold text-center border-b-2 border-transparent text-gray-400 text-sm">
+          新規アカウント登録
+        </button>
+      </div>
+
+      <!-- 認証フォーム -->
+      <form id="auth-form" onsubmit="handleAuthSubmit(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-gray-300 mb-1">メールアドレス</label>
+          <input type="email" id="auth-email" required placeholder="example@mail.com" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-pink-500">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-300 mb-1">パスワード</label>
+          <input type="password" id="auth-password" required minlength="6" placeholder="6文字以上" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-pink-500">
+        </div>
+
+        <!-- エラー・通知メッセージ -->
+        <div id="auth-error-msg" class="text-xs text-red-400 hidden"></div>
+
+        <button type="submit" id="auth-submit-btn" class="w-full bg-pink-600 hover:bg-pink-500 text-white font-bold py-2.5 rounded-lg text-sm transition shadow-md">
+          ログイン
+        </button>
+      </form>
     </div>
 
-    <!-- ① アプリ タブコンテンツ -->
-    <div id="tab-app" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <a href="tier.html" class="bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-pink-500 transition block">
-        <div class="text-3xl mb-2">📊</div>
-        <h3 class="font-bold text-lg mb-1">Tier表作成</h3>
-        <p class="text-xs text-gray-400">ドラッグ＆ドロップで自分だけの好きな顔Tier表を作成・保存</p>
-      </a>
+    <!-- 🎮 アプリメニュー (ログイン済み時に表示) -->
+    <div id="app-menu-container" class="space-y-6 hidden">
+      <!-- タブ切り替えボタン -->
+      <div class="flex border-b border-gray-700">
+        <button id="tab-app-btn" onclick="switchTab('app')" class="flex-1 py-3 text-center font-bold border-b-2 border-pink-500 text-pink-500 transition">
+          🎮 アプリ
+        </button>
+        <button id="tab-manage-btn" onclick="switchTab('manage')" class="flex-1 py-3 text-center font-bold border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition">
+          ⚙️ 管理
+        </button>
+      </div>
 
-      <a href="match.html" class="bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-pink-500 transition block">
-        <div class="text-3xl mb-2">🤝</div>
-        <h3 class="font-bold text-lg mb-1">好きな顔共通点</h3>
-        <p class="text-xs text-gray-400">3人で遊ぶ！全員の好きな顔や個人の癖（ヘキ）をチェック</p>
-      </a>
-    </div>
+      <!-- ① アプリ タブコンテンツ -->
+      <div id="tab-app" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <a href="tier.html" class="bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-pink-500 transition block">
+          <div class="text-3xl mb-2">📊</div>
+          <h3 class="font-bold text-lg mb-1">Tier表作成</h3>
+          <p class="text-xs text-gray-400">ドラッグ＆ドロップで自分だけの好きな顔Tier表を作成・保存</p>
+        </a>
 
-    <!-- ② 管理 タブコンテンツ (初期状態は非表示) -->
-    <div id="tab-manage" class="grid grid-cols-1 md:grid-cols-2 gap-4 hidden">
-      <a href="members.html" class="bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-pink-500 transition block">
-        <div class="text-3xl mb-2">👥</div>
-        <h3 class="font-bold text-lg mb-1">メンバー＆グループ管理</h3>
-        <p class="text-xs text-gray-400">メンバー・写真の登録、グループ/店舗マスターの登録・変更</p>
-      </a>
+        <a href="match.html" class="bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-pink-500 transition block">
+          <div class="text-3xl mb-2">🤝</div>
+          <h3 class="font-bold text-lg mb-1">好きな顔共通点</h3>
+          <p class="text-xs text-gray-400">3人で遊ぶ！全員の好きな顔や個人の癖（ヘキ）をチェック</p>
+        </a>
+      </div>
+
+      <!-- ② 管理 タブコンテンツ (初期状態は非表示) -->
+      <div id="tab-manage" class="grid grid-cols-1 md:grid-cols-2 gap-4 hidden">
+        <a href="members.html" class="bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-pink-500 transition block">
+          <div class="text-3xl mb-2">👥</div>
+          <h3 class="font-bold text-lg mb-1">メンバー＆グループ管理</h3>
+          <p class="text-xs text-gray-400">メンバー・写真の登録、グループ/店舗マスターの登録・変更</p>
+        </a>
+      </div>
     </div>
   </main>
 
-  <!-- タブ切り替え用JavaScript -->
+  <!-- 共通スクリプト -->
+  <script src="js/common.js"></script>
+
+  <!-- index.html専用 認証・表示制御スクリプト -->
   <script>
+    let authMode = 'login'; // 'login' | 'signup'
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      // ログイン状態チェック
+      await checkAuthState();
+    });
+
+    /**
+     * ログイン状態に応じて表示を切り替える
+     */
+    async function checkAuthState() {
+      const user = await getCurrentUser();
+      
+      const authContainer = document.getElementById('auth-container');
+      const appMenuContainer = document.getElementById('app-menu-container');
+      const userStatusArea = document.getElementById('user-status-area');
+      const userEmailDisplay = document.getElementById('user-email-display');
+      const passphraseModal = document.getElementById('passphrase-modal');
+
+      if (user) {
+        // ログイン済みの場合
+        userStatusArea.classList.remove('hidden');
+        userEmailDisplay.textContent = user.email;
+        authContainer.classList.add('hidden');
+
+        // 💡 合言葉が解除されているかチェック
+        if (isAppUnlocked()) {
+          passphraseModal.classList.add('hidden');
+          appMenuContainer.classList.remove('hidden');
+        } else {
+          // 未解除なら合言葉モーダルを表示
+          appMenuContainer.classList.add('hidden');
+          passphraseModal.classList.remove('hidden');
+        }
+      } else {
+        // 未ログイン時
+        authContainer.classList.remove('hidden');
+        appMenuContainer.classList.add('hidden');
+        userStatusArea.classList.add('hidden');
+        passphraseModal.classList.add('hidden');
+        setAppUnlocked(false); // ロック状態をリセット
+      }
+    }
+
+    /**
+     * ログイン / 新規登録タブの切替
+     */
+    function switchAuthMode(mode) {
+      authMode = mode;
+      const loginTab = document.getElementById('auth-tab-login');
+      const signupTab = document.getElementById('auth-tab-signup');
+      const submitBtn = document.getElementById('auth-submit-btn');
+      const errorMsg = document.getElementById('auth-error-msg');
+
+      errorMsg.classList.add('hidden');
+
+      if (mode === 'login') {
+        loginTab.className = "flex-1 pb-2 font-bold text-center border-b-2 border-pink-500 text-pink-500 text-sm";
+        signupTab.className = "flex-1 pb-2 font-bold text-center border-b-2 border-transparent text-gray-400 text-sm";
+        submitBtn.textContent = "ログイン";
+      } else {
+        signupTab.className = "flex-1 pb-2 font-bold text-center border-b-2 border-pink-500 text-pink-500 text-sm";
+        loginTab.className = "flex-1 pb-2 font-bold text-center border-b-2 border-transparent text-gray-400 text-sm";
+        submitBtn.textContent = "アカウントを新規作成";
+      }
+    }
+
+    /**
+     * フォーム送信（ログイン/登録 実行）
+     */
+    async function handleAuthSubmit(e) {
+      e.preventDefault();
+      const email = document.getElementById('auth-email').value;
+      const password = document.getElementById('auth-password').value;
+      const errorMsg = document.getElementById('auth-error-msg');
+      const submitBtn = document.getElementById('auth-submit-btn');
+
+      errorMsg.classList.add('hidden');
+      submitBtn.disabled = true;
+      submitBtn.style.opacity = '0.7';
+
+      try {
+        if (authMode === 'login') {
+          // ログイン実行
+          const { error } = await supabase.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+          
+          await checkAuthState();
+
+        } else {
+          // 新規登録実行
+          const { data, error } = await supabase.auth.signUp({ email, password });
+          if (error) throw error;
+
+          // Supabaseの設定でメール認証が有効な場合
+          if (data?.user && data?.session === null) {
+            // 💡 common.js の共通モーダルを使用
+            if (typeof showConfirmModal === 'function') {
+              await showConfirmModal({
+                title: '✉️ 確認メールを送信しました',
+                message: `【${email}】宛に確認メールを送信しました。\n\nメール内の認証リンクをクリックして登録を完了させてから、ログインを行ってください。`,
+                confirmText: ' OK ',
+                showCancel: false,
+                type: 'info'
+              });
+            }
+
+            // ログインタブに自動切替 ＆ パスワードクリア
+            switchAuthMode('login');
+            document.getElementById('auth-password').value = '';
+          } else {
+            // メール認証Off設定の場合はそのまま完了
+            if (typeof showConfirmModal === 'function') {
+              await showConfirmModal({
+                title: '🎉 登録完了',
+                message: 'アカウント登録が完了しました！',
+                confirmText: ' OK ',
+                showCancel: false,
+                type: 'info'
+              });
+            }
+            await checkAuthState();
+          }
+        }
+
+      } catch (err) {
+        let displayMsg = err.message || '処理に失敗しました。';
+        
+        if (err.message.includes('email rate limit exceeded')) {
+          displayMsg = 'メール送信の制限回数を超えました。時間を置いてから再度お試しください。';
+        } else if (err.message.includes('Invalid login credentials')) {
+          displayMsg = 'メールアドレスまたはパスワードが正しくありません。';
+        } else if (err.message.includes('Email not confirmed')) {
+          displayMsg = 'メールアドレスの認証が完了していません。届いたメールを確認してください。';
+        } else if (err.message.includes('User already registered')) {
+          displayMsg = 'このメールアドレスは既に登録されています。';
+        }
+
+        errorMsg.textContent = displayMsg;
+        errorMsg.classList.remove('hidden');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = '1';
+      }
+    }
+
+    /**
+     * 合言葉フォーム送信
+     */
+    async function handlePassphraseSubmit(e) {
+      e.preventDefault();
+      const inputPass = document.getElementById('passphrase-input').value;
+      const errorMsg = document.getElementById('passphrase-error-msg');
+      const submitBtn = document.getElementById('passphrase-submit-btn');
+
+      errorMsg.classList.add('hidden');
+      submitBtn.disabled = true;
+
+      const isValid = await verifyPassphrase(inputPass);
+
+      if (isValid) {
+        setAppUnlocked(true); // 解除フラグを保持
+        document.getElementById('passphrase-input').value = '';
+        await checkAuthState(); // 表示更新
+      } else {
+        errorMsg.classList.remove('hidden');
+      }
+
+      submitBtn.disabled = false;
+    }
+
+    /**
+     * ログアウト処理（ログアウト時にロック状態もリセット）
+     */
+    async function handleLogout() {
+      let isConfirmed = false;
+      if (typeof showConfirmModal === 'function') {
+        isConfirmed = await showConfirmModal({
+          title: '🚪 ログアウト',
+          message: 'ログアウトしますか？',
+          confirmText: 'ログアウト',
+          cancelText: 'キャンセル',
+          type: 'danger'
+        });
+      } else {
+        isConfirmed = confirm('ログアウトしますか？');
+      }
+
+      if (isConfirmed) {
+        setAppUnlocked(false); // 解除フラグ消去
+        await supabase.auth.signOut();
+        await checkAuthState();
+      }
+    }
+
+    /**
+     * メインメニューのタブ切り替え
+     */
     function switchTab(tabName) {
       const appTab = document.getElementById('tab-app');
       const manageTab = document.getElementById('tab-manage');
@@ -72,20 +315,41 @@
       if (tabName === 'app') {
         appTab.classList.remove('hidden');
         manageTab.classList.add('hidden');
-        
         appBtn.className = "flex-1 py-3 text-center font-bold border-b-2 border-pink-500 text-pink-500 transition";
         manageBtn.className = "flex-1 py-3 text-center font-bold border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition";
       } else {
         appTab.classList.add('hidden');
         manageTab.classList.remove('hidden');
-
         manageBtn.className = "flex-1 py-3 text-center font-bold border-b-2 border-pink-500 text-pink-500 transition";
         appBtn.className = "flex-1 py-3 text-center font-bold border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition";
       }
     }
   </script>
+  <!-- 🔒 秘密の合言葉モーダル -->
+  <div id="passphrase-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-gray-800 border border-gray-700 rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4">
+      <div class="text-center">
+        <div class="w-12 h-12 bg-pink-500/20 text-pink-400 rounded-full flex items-center justify-center mx-auto text-2xl mb-2">
+          🔑
+        </div>
+        <h3 class="text-lg font-bold text-white">秘密の合言葉</h3>
+        <p class="text-xs text-gray-400 mt-1">仲間内限定のアプリです。指定の合言葉を入力してください。</p>
+      </div>
 
-  <!-- 共通スクリプト -->
-  <script src="js/common.js"></script>
+      <form onsubmit="handlePassphraseSubmit(event)" class="space-y-4">
+        <div>
+          <input type="text" id="passphrase-input" required placeholder="合言葉を入力" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-pink-500 text-center font-mono">
+        </div>
+
+        <div id="passphrase-error-msg" class="text-xs text-red-400 text-center hidden">
+          合言葉が違います。
+        </div>
+
+        <button type="submit" id="passphrase-submit-btn" class="w-full bg-pink-600 hover:bg-pink-500 text-white font-bold py-2.5 rounded-lg text-sm transition shadow-md">
+          ロック解除
+        </button>
+      </form>
+    </div>
+  </div>
 </body>
 </html>

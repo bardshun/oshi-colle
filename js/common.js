@@ -158,7 +158,8 @@ window.showConfirmModal = function({
   message = '本当に実行しますか？',
   confirmText = '実行',
   cancelText = 'キャンセル',
-  type = 'danger'
+  type = 'danger',
+  showCancel = true // 💡 showCancel オプションを追加（デフォルトは true）
 }) {
   return new Promise((resolve) => {
     // 既存のモーダルがあれば削除
@@ -179,7 +180,8 @@ window.showConfirmModal = function({
           </h4>
           <p class="text-xs sm:text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">${message}</p>
           <div class="flex justify-end gap-2 pt-2">
-            <button id="confirm-modal-cancel" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-bold rounded-lg border border-gray-700 transition">
+            <!-- 💡 showCancel が false の場合は hidden クラスを付与 -->
+            <button id="confirm-modal-cancel" class="${showCancel ? '' : 'hidden'} px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-bold rounded-lg border border-gray-700 transition">
               ${cancelText}
             </button>
             <button id="confirm-modal-ok" class="px-3 py-1.5 ${btnColorClass} text-xs font-bold rounded-lg shadow transition">
@@ -203,11 +205,90 @@ window.showConfirmModal = function({
     };
 
     okBtn.addEventListener('click', () => cleanup(true));
-    cancelBtn.addEventListener('click', () => cleanup(false));
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', () => cleanup(false));
+    }
     
-    // 背景クリックでキャンセル扱い
+    // 背景クリックでキャンセル扱い（OKのみの通知モーダルの場合はOK扱い/閉じられるように）
     modal.addEventListener('click', (e) => {
-      if (e.target === modal) cleanup(false);
+      if (e.target === modal) cleanup(showCancel ? false : true);
     });
   });
+};
+
+
+/**
+ * 現在のログインユーザーを取得する
+ * @returns {Promise<Object|null>} userオブジェクトまたはnull
+ */
+window.getCurrentUser = async function() {
+  if (!window.supabase) return null;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session ? session.user : null;
+  } catch (e) {
+    console.error('Failed to get current user:', e);
+    return null;
+  }
+};
+
+/**
+ * ログイン必須ガード（未ログインなら index.html に強制遷移）
+ * 各アプリページ (tier.html, members.html など) の DOMContentLoaded で呼ぶ
+ */
+window.requireAuth = async function() {
+  const user = await getCurrentUser();
+  if (!user) {
+    alert('この機能を利用するにはログインが必要です。');
+    window.location.href = 'index.html';
+    return null;
+  }
+  return user;
+};
+
+/**
+ * 入力された合言葉が正しいかDBで検証する
+ * @param {string} inputPassphrase 
+ * @returns {Promise<boolean>} 正しければtrue
+ */
+window.verifyPassphrase = async function(inputPassphrase) {
+  if (!window.supabase || !inputPassphrase) return false;
+
+  try {
+    const { data, error } = await supabase
+      .from('secret_passphrases')
+      .select('id')
+      .eq('passphrase', inputPassphrase.trim())
+      .maybeSingle();
+
+    if (error) {
+      console.error('合言葉の検証エラー:', error);
+      return false;
+    }
+
+    // データが存在すれば正解
+    return !!data;
+  } catch (err) {
+    console.error('合言葉検証処理で例外発生:', err);
+    return false;
+  }
+};
+
+/**
+ * 合言葉で解除済みかどうかを判定する
+ * @returns {boolean}
+ */
+window.isAppUnlocked = function() {
+  return localStorage.getItem('oshi_app_unlocked') === 'true';
+};
+
+/**
+ * アプリの解除状態を記録する
+ */
+window.setAppUnlocked = function(status = true) {
+  if (status) {
+    localStorage.setItem('oshi_app_unlocked', 'true');
+  } else {
+    localStorage.removeItem('oshi_app_unlocked');
+  }
 };

@@ -13,28 +13,59 @@
 </head>
 <body class="bg-gray-900 text-white h-[100dvh] flex flex-col overflow-hidden">
   
-  <!-- 全画面共通ヘッダー（スマホで絶対1行に収める最適化） -->
-  <header class="bg-gray-800 border-b border-gray-700 px-2 sm:px-4 py-2 sticky top-0 z-50 shrink-0">
-    <div class="max-w-4xl mx-auto flex justify-between items-center gap-1">
+  <!-- 全画面共通ヘッダー（スマホ対応・ハンバーガーメニュー集約版） -->
+  <header class="bg-gray-800 border-b border-gray-700 px-3 sm:px-4 py-2 sticky top-0 z-50 shrink-0">
+    <div class="max-w-4xl mx-auto flex justify-between items-center gap-2">
+      
       <!-- タイトルエリア -->
       <div class="flex items-center space-x-1.5 shrink-0">
         <a href="index.html" class="text-gray-400 hover:text-white transition text-xs sm:text-sm">🏠</a>
         <h1 class="text-xs sm:text-base font-bold text-pink-500 whitespace-nowrap">📊 Tier表作成</h1>
       </div>
 
-      <!-- ボタンエリア（1行固定・コンパクト化） -->
-      <div class="flex items-center space-x-1 shrink-0">
-        <button onclick="openTierPreviewModal()" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-[10px] sm:text-xs px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg border border-purple-500 shadow transition flex items-center gap-1 whitespace-nowrap">
-          <span>🔍</span> <span class="hidden sm:inline">全体確認 ＆ </span>保存
+      <!-- 右側操作エリア（1行固定） -->
+      <div class="flex items-center gap-2 shrink-0">
+        
+        <!-- 💾 一番使うDB保存ボタン（表に常駐） -->
+        <button onclick="openSaveModal()" class="bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs px-3 py-1.5 rounded-lg shadow transition flex items-center gap-1 whitespace-nowrap">
+          <span>💾</span> 保存
         </button>
-        <button onclick="addTierRow()" class="bg-gray-700 hover:bg-gray-600 text-[10px] sm:text-xs px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg border border-gray-600 transition whitespace-nowrap">
-          ＋ ランク追加
-        </button>
-        <!-- 例: +ランク追加ボタンの隣などに配置 -->
-        <button onclick="confirmResetTierBoard()" 
-                class="bg-gray-800 hover:bg-red-900/60 border border-gray-700 hover:border-red-500 text-gray-300 hover:text-red-300 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow">
-          🔄 リセット
-        </button>
+
+        <!-- 🍔 ハンバーガーメニューボタン ＆ ドロップダウン -->
+        <div class="relative">
+          <button id="tier-menu-toggle-btn" onclick="toggleTierMenu(event)" class="p-1.5 sm:p-2 bg-gray-700 hover:bg-gray-600 text-gray-200 border border-gray-600 rounded-lg transition flex items-center justify-center">
+            <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+            </svg>
+          </button>
+
+          <!-- ドロップダウンメニュー本文 -->
+          <div id="tier-dropdown-menu" class="absolute right-0 mt-2 w-52 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl py-1 z-50 hidden">
+            
+            <!-- ランク追加 -->
+            <button onclick="execMenuAction('addRank')" class="w-full text-left px-4 py-2.5 text-xs text-gray-200 hover:bg-gray-700 flex items-center gap-2.5 transition">
+              <span class="text-base">➕</span> ランク追加
+            </button>
+
+            <!-- 読み込み -->
+            <button onclick="execMenuAction('openLoad')" class="w-full text-left px-4 py-2.5 text-xs text-gray-200 hover:bg-gray-700 flex items-center gap-2.5 transition">
+              <span class="text-base">📂</span> 読み込み（保存一覧）
+            </button>
+
+            <!-- 全体確認＆画像保存（旧: openTierPreviewModal） -->
+            <button onclick="execMenuAction('openPreview')" class="w-full text-left px-4 py-2.5 text-xs text-gray-200 hover:bg-gray-700 flex items-center gap-2.5 transition">
+              <span class="text-base">🔍</span> 全体確認 ＆ 画像保存
+            </button>
+
+            <div class="border-t border-gray-700 my-1"></div>
+
+            <!-- リセット（危険操作） -->
+            <button onclick="execMenuAction('resetTier')" class="w-full text-left px-4 py-2.5 text-xs text-red-400 hover:bg-red-500/10 flex items-center gap-2.5 font-bold transition">
+              <span class="text-base">🔄</span> リセット
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   </header>
@@ -132,6 +163,50 @@
         <div id="tier-export-target" class="w-max min-w-[950px] bg-gray-900 p-4 rounded-xl border border-gray-800 space-y-2 shadow-2xl">
           <!-- JavaScriptで出力用Tier表全体をレンダリング -->
         </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 💾 保存モーダル -->
+  <div id="save-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-gray-800 border border-gray-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <h3 class="text-lg font-bold text-white flex items-center gap-2">
+        💾 Tier表を保存
+      </h3>
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">タイトル</label>
+        <input type="text" id="save-title-input" placeholder="例: 2026春推し顔Tier" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500">
+      </div>
+
+      <div id="save-limit-warning" class="text-xs text-amber-400 bg-amber-500/10 p-2.5 rounded-lg border border-amber-500/20 hidden">
+        ⚠️ 保存数が上限（20件）に達しています。既存のリストを上書きするか削除してください。
+      </div>
+
+      <div class="flex gap-2 justify-end pt-2">
+        <button onclick="closeSaveModal()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs rounded-lg transition">
+          キャンセル
+        </button>
+        <button id="exec-save-btn" onclick="handleExecSave()" class="px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold rounded-lg transition">
+          保存する
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 📂 保存一覧・呼出モーダル -->
+  <div id="load-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-gray-800 border border-gray-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b border-gray-700 pb-3">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          📂 保存済みTier表一覧
+          <span id="saved-count-badge" class="text-xs bg-gray-700 px-2 py-0.5 rounded-full text-pink-400 font-mono">0/20</span>
+        </h3>
+        <button onclick="closeLoadModal()" class="text-gray-400 hover:text-white text-lg">✕</button>
+      </div>
+
+      <!-- リスト一覧コンテナ -->
+      <div id="saved-list-container" class="max-h-80 overflow-y-auto space-y-2 pr-1">
+        <!-- JSで動的生成 -->
       </div>
     </div>
   </div>

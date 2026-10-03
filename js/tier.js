@@ -16,6 +16,7 @@ let currentSortKey = 'ruby';
 let isSortAsc = true; // true: 昇順 (▲) / false: 降順 (▼)
 let saveTimeout = null;
 let isTierUIInitialized = false;
+let currentEditingTierId = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   renderTierBoard();     // ボード初期表示
@@ -1080,5 +1081,368 @@ function loadUIPreferences() {
 
   } catch (e) {
     console.error('UI preferences load failed:', e);
+  }
+}
+
+/**
+ * ユーザーの保存済みTier表一覧を取得する
+ */
+async function fetchUserTierLists() {
+  const user = await getCurrentUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('tier_lists')
+    .select('id, title, updated_at')
+    .eq('user_id', user.id)
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    console.error('Tier表一覧の取得に失敗:', error);
+    return [];
+  }
+  return data || [];
+}
+
+/**
+ * Tier表の保存処理（20件上限チェック付き）
+ * @param {string} title 
+ * @param {Object} tierData 
+ * @param {string|null} currentListId 新規ならnull、上書きならUUID
+ */
+async function saveTierList(title, tierData, currentListId = null) {
+  const user = await getCurrentUser();
+  if (!user) {
+    if (typeof showConfirmModal === 'function') {
+      await showConfirmModal({
+        title: '🔒 ログインが必要です',
+        message: '保存機能を利用するにはログインが必要です。',
+        confirmText: 'OK',
+        showCancel: false,
+        type: 'info'
+      });
+    }
+    return { success: false, reason: 'unauthorized' };
+  }
+
+  // 新規保存の場合は20件の上限チェック
+  if (!currentListId) {
+    const existingLists = await fetchUserTierLists();
+    if (existingLists.length >= 20) {
+      if (typeof showConfirmModal === 'function') {
+        await showConfirmModal({
+          title: '⚠️ 保存上限エラー',
+          message: '保存件数が上限（20件）に達しています。\n不要なリストを削除するか、既存のリストに上書き保存してください。',
+          confirmText: '了解',
+          showCancel: false,
+          type: 'warning'
+        });
+      }
+      return { success: false, reason: 'limit_exceeded' };
+    }
+  }
+
+  // 💡 data を tier_data に修正！
+  const payload = {
+    user_id: user.id,
+    title: title,
+    tier_data: tierData,
+    updated_at: new Date().toISOString()
+  };
+
+  let response;
+  if (currentListId) {
+    // 上書き保存
+    response = await supabase
+      .from('tier_lists')
+      .update(payload)
+      .eq('id', currentListId)
+      .select();
+  } else {
+    // 新規保存
+    response = await supabase
+      .from('tier_lists')
+      .insert(payload)
+      .select();
+  }
+
+  if (response.error) {
+    console.error('保存失敗:', response.error);
+    if (typeof showConfirmModal === 'function') {
+      await showConfirmModal({
+        title: '❌ 保存エラー',
+        message: `保存に失敗しました:\n${response.error.message}`,
+        confirmText: '閉じる',
+        showCancel: false,
+        type: 'danger'
+      });
+    }
+    return { success: false, message: response.error.message };
+  }
+
+  // 保存成功通知
+  if (typeof showConfirmModal === 'function') {
+    await showConfirmModal({
+      title: '🎉 保存完了',
+      message: `Tier表「${title}」を保存しました！`,
+      confirmText: 'OK',
+      showCancel: false,
+      type: 'info'
+    });
+  }
+
+  return { success: true, data: response.data[0] };
+}
+
+/**
+ * ID指定でTier表データを1件読み込む
+ */
+async function loadTierListById(id) {
+  const { data, error } = await supabase
+    .from('tier_lists')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    console.error('データの取得に失敗:', error);
+    return null;
+  }
+  return data;
+}
+
+/**
+ * Tier表の削除処理
+ */
+async function deleteTierList(id) {
+  const { error } = await supabase
+    .from('tier_lists')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('削除失敗:', error);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * 【保存モーダルを開く】
+ */
+async function openSaveModal() {
+  const user = await getCurrentUser();
+  if (!user) {
+    if (typeof showConfirmModal === 'function') {
+      await showConfirmModal({
+        title: '🔒 ログインが必要です',
+        message: '保存機能を利用するにはログインが必要です。',
+        confirmText: 'OK',
+        showCancel: false,
+        type: 'info'
+      });
+    }
+    return;
+  }
+
+  // 現在の保存件数を取得して上限警告を表示
+  const existingLists = await fetchUserTierLists();
+  const warningEl = document.getElementById('save-limit-warning');
+  
+  if (!currentEditingTierId && existingLists.length >= 20) {
+    warningEl.classList.remove('hidden');
+  } else {
+    warningEl.classList.add('hidden');
+  }
+
+  document.getElementById('save-modal').classList.remove('hidden');
+}
+
+/**
+ * 【保存モーダルを閉じる】
+ */
+function closeSaveModal() {
+  document.getElementById('save-modal').classList.add('hidden');
+  document.getElementById('save-title-input').value = '';
+}
+
+/**
+ * 【保存実行処理（モーダルの「保存する」ボタン）】
+ */
+async function handleExecSave() {
+  const titleInput = document.getElementById('save-title-input').value.trim();
+  if (!titleInput) {
+    if (typeof showConfirmModal === 'function') {
+      await showConfirmModal({
+        title: '⚠️ 入力エラー',
+        message: 'タイトルを入力してください。',
+        confirmText: 'OK',
+        showCancel: false,
+        type: 'warning'
+      });
+    }
+    return;
+  }
+
+  // 💡 既存の getCurrentTierState() を使用して現在の状態を取得！
+  const tierData = getCurrentTierState();
+
+  const result = await saveTierList(titleInput, tierData, currentEditingTierId);
+
+  if (result.success) {
+    currentEditingTierId = result.data.id;
+    closeSaveModal();
+  }
+}
+
+/**
+ * 【読み込みモーダルを開く】
+ */
+async function openLoadModal() {
+  const user = await getCurrentUser();
+  if (!user) {
+    if (typeof showConfirmModal === 'function') {
+      await showConfirmModal({
+        title: '🔒 ログインが必要です',
+        message: '一覧を読み込むにはログインが必要です。',
+        confirmText: 'OK',
+        showCancel: false,
+        type: 'info'
+      });
+    }
+    return;
+  }
+
+  await renderSavedTierList();
+  document.getElementById('load-modal').classList.remove('hidden');
+}
+
+/**
+ * 【読み込みモーダルを閉じる】
+ */
+function closeLoadModal() {
+  document.getElementById('load-modal').classList.add('hidden');
+}
+
+/**
+ * モーダル内に保存済み一覧を描画する
+ */
+async function renderSavedTierList() {
+  const container = document.getElementById('saved-list-container');
+  const countBadge = document.getElementById('saved-count-badge');
+  container.innerHTML = '<div class="text-center py-4 text-xs text-gray-400">読み込み中...</div>';
+
+  const lists = await fetchUserTierLists();
+  countBadge.textContent = `${lists.length}/20`;
+
+  if (lists.length === 0) {
+    container.innerHTML = '<div class="text-center py-8 text-xs text-gray-500">保存されたTier表はありません</div>';
+    return;
+  }
+
+  container.innerHTML = lists.map(item => {
+    const dateStr = new Date(item.updated_at).toLocaleString('ja-JP', {
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+    });
+
+    return `
+      <div class="flex items-center justify-between p-3 bg-gray-900/60 hover:bg-gray-900 border border-gray-700/50 rounded-xl transition">
+        <div class="space-y-0.5 cursor-pointer flex-1" onclick="handleSelectTier('${item.id}')">
+          <div class="text-sm font-bold text-white hover:text-pink-400 transition">${item.title}</div>
+          <div class="text-[10px] text-gray-500 font-mono">最終更新: ${dateStr}</div>
+        </div>
+        <div class="flex items-center gap-2 pl-3">
+          <button onclick="handleSelectTier('${item.id}')" class="px-2.5 py-1 bg-pink-600/80 hover:bg-pink-600 text-white text-xs rounded-lg transition">
+            開く
+          </button>
+          <button onclick="handleDeleteTier('${item.id}', '${item.title}')" class="px-2 py-1 bg-red-500/20 hover:bg-red-500/40 text-red-400 text-xs rounded-lg transition">
+            削除
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/**
+ * 一覧からデータを選択して画面に復元する
+ */
+async function handleSelectTier(id) {
+  const item = await loadTierListById(id);
+  if (!item) return;
+
+  currentEditingTierId = item.id;
+  
+  // 💡 item.data から item.tier_data に修正！
+  if (typeof loadTierState === 'function') {
+    loadTierState(item.tier_data);
+  }
+
+  closeLoadModal();
+
+  if (typeof showConfirmModal === 'function') {
+    await showConfirmModal({
+      title: '📂 読み込み完了',
+      message: `「${item.title}」を読み込みました。`,
+      confirmText: 'OK',
+      showCancel: false,
+      type: 'info'
+    });
+  }
+}
+
+/**
+ * 一覧から削除を実行する
+ */
+async function handleDeleteTier(id, title) {
+  const success = await deleteTierList(id, title);
+  if (success) {
+    if (currentEditingTierId === id) {
+      currentEditingTierId = null; // 編集中のものが消されたらIDクリア
+    }
+    await renderSavedTierList(); // リスト再描画
+  }
+}
+
+/**
+ * ハンバーガーメニューの開閉
+ */
+function toggleTierMenu(e) {
+  e.stopPropagation();
+  const menu = document.getElementById('tier-dropdown-menu');
+  menu.classList.toggle('hidden');
+}
+
+/**
+ * メニュー外をクリックしたときに自動で閉じる
+ */
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('tier-dropdown-menu');
+  const btn = document.getElementById('tier-menu-toggle-btn');
+  if (menu && !menu.classList.contains('hidden') && !menu.contains(e.target) && !btn?.contains(e.target)) {
+    menu.classList.add('hidden');
+  }
+});
+
+/**
+ * ドロップダウンメニューの各アクション実行
+ */
+function execMenuAction(actionType) {
+  // メニューを閉じる
+  document.getElementById('tier-dropdown-menu')?.classList.add('hidden');
+
+  switch (actionType) {
+    case 'addRank':
+      if (typeof addTierRow === 'function') addTierRow();
+      break;
+    case 'openLoad':
+      if (typeof openLoadModal === 'function') openLoadModal();
+      break;
+    case 'openPreview':
+      if (typeof openTierPreviewModal === 'function') openTierPreviewModal();
+      break;
+    case 'resetTier':
+      if (typeof confirmResetTierBoard === 'function') confirmResetTierBoard();
+      break;
   }
 }
