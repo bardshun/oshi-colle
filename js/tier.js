@@ -902,13 +902,42 @@ function updateGroupOptions() {
 function getCurrentTierState(title = '') {
   const currentTitle = title || document.getElementById('tier-title-input')?.value || '無題のTier表';
   
+  const rows = {};
+  const tierList = Array.isArray(defaultTiers) ? defaultTiers : [];
+  
+  tierList.forEach(tier => {
+    // tierがオブジェクトなら tier.id、文字列ならそのまま使う
+    const tierId = (typeof tier === 'object' && tier !== null) ? tier.id : tier;
+    if (!tierId) return;
+
+    const dropZone = document.getElementById(`drop-${tierId}`);
+    if (!dropZone) {
+      rows[tierId] = [];
+      return;
+    }
+    
+    const itemIds = [];
+    const children = dropZone.children;
+    
+    Array.from(children).forEach(el => {
+      if (el.id && el.id.startsWith('card-')) {
+        const memberId = el.id.replace('card-', '');
+        itemIds.push(memberId);
+      } else if (el.id && el.id.startsWith('wall-placed-')) {
+        itemIds.push(el.id);
+      }
+    });
+    
+    rows[tierId] = itemIds;
+  });
+
   return {
     title: currentTitle,
     updated_at: new Date().toISOString(),
     tier_data: {
-      tiers: Array.isArray(defaultTiers) ? defaultTiers : [],
-      positions: memberPositions || {},
-      wall_count: wallCount || 0
+      tiers: defaultTiers,
+      rows: rows,
+      wall_count: wallCount
     }
   };
 }
@@ -919,7 +948,7 @@ function getCurrentTierState(title = '') {
 function loadTierState(stateData) {
   if (!stateData || !stateData.tier_data) return;
 
-  const { tiers, positions, wall_count } = stateData.tier_data;
+  const { tiers, rows, wall_count } = stateData.tier_data;
 
   // タイトルの反映
   const titleInput = document.getElementById('tier-title-input');
@@ -932,12 +961,7 @@ function loadTierState(stateData) {
     defaultTiers = JSON.parse(JSON.stringify(tiers));
   }
 
-  // 2. 配置情報の復元
-  if (positions && typeof positions === 'object') {
-    memberPositions = JSON.parse(JSON.stringify(positions));
-  }
-
-  // 3. 壁カウンターの復元
+  // 2. 壁カウンターの復元
   if (typeof wall_count === 'number') {
     wallCount = wall_count;
   }
@@ -945,11 +969,77 @@ function loadTierState(stateData) {
   // 選択状態のリセット
   selectedMemberData = null;
 
-  // 画面の再描画
+  // 3. 画面の再描画（まずTier表の枠組みを作る）
   if (typeof renderTierBoard === 'function') renderTierBoard();
-  if (typeof restoreCardPositions === 'function') restoreCardPositions();
+
+  // 4. 配置・並び順・壁の復元
+  if (rows && typeof rows === 'object') {
+    // 新形式（rowsがある場合）
+    restoreRowsData(rows);
+  } else if (stateData.tier_data.positions) {
+    // 互換性フォールバック（旧形式の positions があれば従来通り動かす）
+    memberPositions = JSON.parse(JSON.stringify(stateData.tier_data.positions));
+    if (typeof restoreCardPositions === 'function') restoreCardPositions();
+  }
+
   if (typeof renderPool === 'function') renderPool();
   if (typeof updateCardHighlightStyles === 'function') updateCardHighlightStyles();
+}
+
+// 💡 rows（並び順＆壁配列）からDOMを完全再構築する関数
+function restoreRowsData(rows) {
+  // 一旦 memberPositions もクリアまたは再構築しておく
+  memberPositions = {};
+
+  Object.keys(rows).forEach(tierId => {
+    const dropZone = document.getElementById(`drop-${tierId}`);
+    if (!dropZone) return;
+
+    // ドロップゾーンをクリア
+    dropZone.innerHTML = '';
+
+    const itemIds = rows[tierId] || [];
+    itemIds.forEach(id => {
+      if (String(id).startsWith('wall-placed-')) {
+        // --- 壁の場合の復元 ---
+        const existingWall = document.getElementById(id);
+        if (existingWall) {
+          dropZone.appendChild(existingWall);
+        } else {
+          // もしDOM上に存在しなければ新規作成して復元
+          const newWallEl = document.createElement('div');
+          newWallEl.id = id;
+          newWallEl.draggable = true;
+          newWallEl.setAttribute('ondragstart', `dragStart(event, '${id}')`);
+          newWallEl.setAttribute('onclick', `handleCardClick(event, '${id}')`);
+          newWallEl.className = "w-16 h-20 sm:w-20 sm:h-24 bg-black text-white border-2 border-gray-600 rounded-lg flex flex-col items-center justify-center cursor-grab active:cursor-grabbing hover:border-red-500 transition flex-shrink-0 select-none shadow relative group";
+          newWallEl.innerHTML = `
+            <span class="text-xl sm:text-2xl font-black pointer-events-none">壁</span>
+            <button onclick="removeWall('${id}')" class="absolute top-1 right-1 text-xs text-gray-500 hover:text-red-500 font-bold opacity-0 group-hover:opacity-100 transition">✕</button>
+          `;
+          dropZone.appendChild(newWallEl);
+        }
+      } else {
+        // --- メンバーカードの場合の復元 ---
+        memberPositions[id] = tierId; // 位置情報も更新
+        let cardEl = document.getElementById(`card-${id}`);
+        
+        // カード要素がなければ全件データから生成
+        if (!cardEl) {
+          const member = allMembers?.find(m => String(m.id) === String(id));
+          if (member && typeof createMemberCardHtml === 'function') {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = createMemberCardHtml(member);
+            cardEl = tempDiv.firstElementChild;
+          }
+        }
+        
+        if (cardEl) {
+          dropZone.appendChild(cardEl);
+        }
+      }
+    });
+  });
 }
 
 /**

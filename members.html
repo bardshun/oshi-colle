@@ -128,27 +128,70 @@
         </button>
       </div>
 
-      <div id="groups-list" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-        <!-- JSでグループカード生成 -->
+      <!-- 💡 追加：並び替え選択 ＆ 固定インデックスジャンプバー -->
+      <div class="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border border-slate-800 rounded-2xl p-3 shadow-xl space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-slate-300">表示形式：</span>
+          <select id="group-sort-mode" onchange="renderGroups()" class="bg-slate-900 text-white text-xs border border-slate-700 rounded-lg px-3 py-1.5 focus:outline-none focus:border-purple-500">
+            <option value="kana">あいうえお順（フラット）</option>
+            <option value="prefecture">拠点（都道府県）別</option>
+            <option value="category">区分別</option>
+          </select>
+        </div>
+
+        <!-- インデックスジャンプバー（先頭にTOPボタン） -->
+        <div id="group-index-jump-bar" class="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs whitespace-nowrap scrollbar-thin">
+          <button onclick="scrollToGroupTop()" class="px-3 py-1 bg-slate-800 hover:bg-purple-600 text-slate-200 hover:text-white rounded-lg font-bold transition flex-shrink-0 border border-slate-700">
+            TOP
+          </button>
+          <!-- JSで各グループへのジャンプボタンが動的追加されます -->
+        </div>
+      </div>
+
+      <!-- 💡 変更：グループリストのコンテナ -->
+      <div id="groups-list" class="space-y-6">
+        <!-- JSでグループまたはセクションが生成されます -->
       </div>
     </section>
 
     <!-- TAB 3: ユーザー表示設定 -->
     <section id="tab-content-active" class="space-y-4 hidden">
-      <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 flex flex-wrap justify-between items-center gap-3">
-        <div>
-          <h2 class="text-base font-bold text-pink-400">👁 プレイ用表示設定</h2>
-          <p class="text-xs text-slate-400">Tier表や共通点ゲームで使用したいグループ・メンバーのみチェックを入れてください。</p>
+      <!-- 💡 上部に固定（Sticky）するヘッダーエリア（説明文・保存ボタン・切替・インデックスジャンプ） -->
+      <div class="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+        <div class="flex flex-wrap justify-between items-center gap-3">
+          <div>
+            <h2 class="text-base font-bold text-pink-400">👁 プレイ用表示設定</h2>
+            <p class="text-xs text-slate-400">Tier表や共通点ゲームで使用したいグループ・メンバーのみチェックを入れてください。</p>
+          </div>
+
+          <!-- 明示的な一括保存ボタン（常時アクセス可能） -->
+          <button onclick="saveUserMemberSettings()" class="bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-[0_0_12px_rgba(236,72,153,0.4)] shrink-0 flex items-center gap-1">
+            <span>💾</span> 設定を保存
+          </button>
         </div>
 
-        <!-- 💡 明示的な一括保存ボタン -->
-        <button onclick="saveUserMemberSettings()" class="bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-[0_0_12px_rgba(236,72,153,0.4)] shrink-0 flex items-center gap-1">
-          <span>💾</span> 設定を保存
-        </button>
+        <!-- 並び替え切替 ＆ インデックスジャンプバー -->
+        <div class="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-slate-300">表示形式：</span>
+            <select id="active-sort-mode" onchange="renderActiveManagement()" class="bg-slate-900 text-white text-xs border border-slate-700 rounded-lg px-3 py-1.5 focus:outline-none focus:border-pink-500">
+              <option value="kana">あいうえお順（フラット）</option>
+              <option value="prefecture">拠点（都道府県）別</option>
+              <option value="category">区分別</option>
+            </select>
+          </div>
+
+          <!-- インデックスジャンプバー（先頭にTOPボタン） -->
+          <div id="active-index-jump-bar" class="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs whitespace-nowrap scrollbar-thin">
+            <button onclick="scrollToActiveTop()" class="px-3 py-1 bg-slate-800 hover:bg-pink-600 text-slate-200 hover:text-white rounded-lg font-bold transition flex-shrink-0 border border-slate-700">
+              TOP
+            </button>
+          </div>
+        </div>
       </div>
 
-      <!-- グループ・メンバー一覧コンテナ -->
-      <div id="active-management-list" class="space-y-4">
+      <!-- スクロール可能なグループ・メンバー一覧コンテナ -->
+      <div id="active-management-list" class="space-y-4 pt-2">
         <!-- JSで生成 -->
       </div>
     </section>

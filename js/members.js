@@ -284,62 +284,230 @@ window.filterMembers = function() {
   renderMembers(filtered);
 };
 
-// 3. グループ描画
+// ページ最上部（またはタブ上部）へスムーズスクロール
+function scrollToGroupTop() {
+  const tabContent = document.getElementById('tab-content-groups');
+  if (tabContent) {
+    const offsetPosition = tabContent.getBoundingClientRect().top + window.pageYOffset - 80;
+    window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+  }
+}
+
+// 特定のグループセクションへスムーズスクロール（固定ヘッダーの高さを考慮）
+function jumpToGroupSection(sectionId) {
+  const el = document.getElementById(sectionId);
+  if (el) {
+    const headerOffset = 150; // 固定ヘッダー分のオフセット
+    const elementPosition = el.getBoundingClientRect().top;
+    const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+    window.scrollTo({
+      top: offsetPosition,
+      behavior: 'smooth'
+    });
+  }
+}
+
+// レンダリング処理（あいうえお順 ＆ 拠点別 ＆ 区分別 対応版）
 function renderGroups() {
   const container = document.getElementById('groups-list');
+  const jumpBar = document.getElementById('group-index-jump-bar');
+  const sortModeSelect = document.getElementById('group-sort-mode');
+  
+  if (!container || !jumpBar) return;
+
   if (allGroups.length === 0) {
-    container.innerHTML = '<div class="col-span-full text-center py-10 text-xs text-slate-500">グループが登録されていません</div>';
+    container.innerHTML = '<div class="text-center py-10 text-xs text-slate-500">グループが登録されていません</div>';
+    jumpBar.innerHTML = `
+      <button onclick="scrollToGroupTop()" class="px-3 py-1 bg-slate-800 hover:bg-purple-600 text-slate-200 hover:text-white rounded-lg font-bold transition flex-shrink-0 border border-slate-700">
+        TOP
+      </button>
+    `;
     return;
   }
 
-  container.innerHTML = allGroups.map(g => {
-    const imgUrl = g.image_url || 'https://via.placeholder.com/300x150?text=Group+Image';
-    const memberCount = allMembers.filter(m => m.group_id === g.id).length;
-    
-    // 都道府県とエリア補足を綺麗に結合して表示
-    const locText = [g.prefecture, g.area_note].filter(Boolean).join(' ') || '拠点未設定';
+  const sortMode = sortModeSelect ? sortModeSelect.value : 'kana';
 
-    return `
-      <div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-lg hover:border-purple-500/50 transition">
-        <div class="h-28 bg-slate-950 relative">
-          <img src="${imgUrl}" class="w-full h-full object-cover">
-          <button onclick="openGroupModal(${g.id})" class="absolute top-2 right-2 bg-slate-950/80 hover:bg-purple-600 text-white text-[10px] px-2 py-1 rounded-lg border border-slate-700 backdrop-blur-sm transition">
-            ✏️ 編集
-          </button>
-        </div>
-        <div class="p-3 flex justify-between items-center">
-          <div>
-            <div class="font-extrabold text-sm text-slate-100">${g.name}</div>
-            <div class="text-[10px] text-slate-400">${locText}</div>
-          </div>
-          <span class="text-xs bg-purple-950/60 text-purple-300 border border-purple-800/50 px-2 py-0.5 rounded-full font-bold">
-            ${memberCount}名
-          </span>
-        </div>
+  // ジャンプバーを初期化（TOPボタンを常駐）
+  jumpBar.innerHTML = `
+    <button onclick="scrollToGroupTop()" class="px-3 py-1 bg-slate-800 hover:bg-purple-600 text-slate-200 hover:text-white rounded-lg font-bold transition flex-shrink-0 border border-slate-700">
+      TOP
+    </button>
+  `;
+
+  // 1. あいうえお順モードの場合
+  if (sortMode === 'kana') {
+    const sortedGroups = [...allGroups].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja'));
+    container.innerHTML = `
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+        ${sortedGroups.map(g => createGroupCardHtml(g)).join('')}
       </div>
     `;
-  }).join('');
+    return;
+  }
+
+  // 2. 拠点（都道府県）別モードの場合
+  if (sortMode === 'prefecture') {
+    const groupsByPref = {};
+    allGroups.forEach(g => {
+      const pref = g.prefecture || '拠点未設定';
+      if (!groupsByPref[pref]) groupsByPref[pref] = [];
+      groupsByPref[pref].push(g);
+    });
+
+    container.innerHTML = '';
+    Object.keys(groupsByPref).forEach(pref => {
+      const groupList = groupsByPref[pref];
+      const sectionId = `group-pref-${pref}`;
+
+      const jumpBtn = document.createElement('button');
+      jumpBtn.className = "px-3 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-lg transition flex-shrink-0 border border-slate-800 text-xs";
+      jumpBtn.textContent = `${pref} (${groupList.length})`;
+      jumpBtn.onclick = () => jumpToGroupSection(sectionId);
+      jumpBar.appendChild(jumpBtn);
+
+      const sectionDiv = document.createElement('div');
+      sectionDiv.id = sectionId;
+      sectionDiv.className = "space-y-3";
+      sectionDiv.innerHTML = `
+        <div class="flex items-center gap-3 border-b border-slate-800 pb-2">
+          <h3 class="text-sm font-extrabold text-purple-400">${pref}</h3>
+          <span class="text-[10px] text-slate-500 bg-slate-900 px-2 py-0.5 rounded-full">${groupList.length}件</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          ${groupList.map(g => createGroupCardHtml(g)).join('')}
+        </div>
+      `;
+      container.appendChild(sectionDiv);
+    });
+    return;
+  }
+
+  // 3. 区分別モードの場合
+  if (sortMode === 'category') {
+    const groupsByCategory = {};
+    allGroups.forEach(g => {
+      // グループに category プロパティがある前提（なければ 'other'）
+      const catKey = g.category || 'other';
+      if (!groupsByCategory[catKey]) groupsByCategory[catKey] = [];
+      groupsByCategory[catKey].push(g);
+    });
+
+    container.innerHTML = '';
+    Object.keys(groupsByCategory).forEach(catKey => {
+      const groupList = groupsByCategory[catKey];
+      // common.js の CATEGORY_NAME_MAP を利用して日本語ラベルに変換
+      const catLabel = (typeof CATEGORY_NAME_MAP !== 'undefined' && CATEGORY_NAME_MAP[catKey]) ? CATEGORY_NAME_MAP[catKey] : (catKey || '未分類');
+      const sectionId = `group-cat-${catKey}`;
+
+      const jumpBtn = document.createElement('button');
+      jumpBtn.className = "px-3 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-lg transition flex-shrink-0 border border-slate-800 text-xs";
+      jumpBtn.textContent = `${catLabel} (${groupList.length})`;
+      jumpBtn.onclick = () => jumpToGroupSection(sectionId);
+      jumpBar.appendChild(jumpBtn);
+
+      const sectionDiv = document.createElement('div');
+      sectionDiv.id = sectionId;
+      sectionDiv.className = "space-y-3";
+      sectionDiv.innerHTML = `
+        <div class="flex items-center gap-3 border-b border-slate-800 pb-2">
+          <h3 class="text-sm font-extrabold text-purple-400">${catLabel}</h3>
+          <span class="text-[10px] text-slate-500 bg-slate-900 px-2 py-0.5 rounded-full">${groupList.length}件</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          ${groupList.map(g => createGroupCardHtml(g)).join('')}
+        </div>
+      `;
+      container.appendChild(sectionDiv);
+    });
+  }
 }
 
-// 4. 表示/非表示（アクティブ選択）一覧描画
+// グループカードのHTML生成を共通化するためのヘルパー関数
+function createGroupCardHtml(g) {
+  const imgUrl = g.image_url || 'https://via.placeholder.com/300x150?text=Group+Image';
+  const memberCount = allMembers.filter(m => m.group_id === g.id).length;
+  const locText = [g.prefecture, g.area_note].filter(Boolean).join(' ') || '拠点未設定';
+
+  return `
+    <div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-lg hover:border-purple-500/50 transition">
+      <div class="h-28 bg-slate-950 relative">
+        <img src="${imgUrl}" class="w-full h-full object-cover">
+        <button onclick="openGroupModal(${g.id})" class="absolute top-2 right-2 bg-slate-950/80 hover:bg-purple-600 text-white text-[10px] px-2 py-1 rounded-lg border border-slate-700 backdrop-blur-sm transition">
+          ✏️ 編集
+        </button>
+      </div>
+      <div class="p-3 flex justify-between items-center">
+        <div>
+          <div class="font-extrabold text-sm text-slate-100">${g.name}</div>
+          <div class="text-[10px] text-slate-400">${locText}</div>
+        </div>
+        <span class="text-xs bg-purple-950/60 text-purple-300 border border-purple-800/50 px-2 py-0.5 rounded-full font-bold">
+          ${memberCount}名
+        </span>
+      </div>
+    </div>
+  `;
+}
+
+// ページ最上部へスムーズスクロール
+function scrollToActiveTop() {
+  const tabContent = document.getElementById('tab-content-active');
+  if (tabContent) {
+    const offsetPosition = tabContent.getBoundingClientRect().top + window.pageYOffset - 20;
+    window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+  }
+}
+
+// 特定のグループセクションへスムーズスクロール（固定ヘッダーの高さを考慮）
+function jumpToActiveSection(sectionId) {
+  const el = document.getElementById(sectionId);
+  if (el) {
+    const headerOffset = 210; // 固定ヘッダー分のオフセット
+    const elementPosition = el.getBoundingClientRect().top;
+    const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+    window.scrollTo({
+      top: offsetPosition,
+      behavior: 'smooth'
+    });
+  }
+}
+
+// ユーザー表示設定のレンダリング処理（グループ化・ジャンプ対応版）
 function renderActiveManagement() {
   const container = document.getElementById('active-management-list');
-  if (!container) return;
+  const jumpBar = document.getElementById('active-index-jump-bar');
+  const sortModeSelect = document.getElementById('active-sort-mode');
+  
+  if (!container || !jumpBar) return;
 
   if (!allGroups || allGroups.length === 0) {
     container.innerHTML = '<div class="text-center py-8 text-xs text-slate-500">グループを登録すると表示設定が可能になります</div>';
+    jumpBar.innerHTML = `
+      <button onclick="scrollToActiveTop()" class="px-3 py-1 bg-slate-800 hover:bg-pink-600 text-slate-200 hover:text-white rounded-lg font-bold transition flex-shrink-0 border border-slate-700">
+        TOP
+      </button>
+    `;
     return;
   }
 
-  container.innerHTML = allGroups.map(g => {
-    // 該当グループのメンバー一覧
+  const sortMode = sortModeSelect ? sortModeSelect.value : 'kana';
+
+  // ジャンプバーを初期化（TOPボタンを常駐）
+  jumpBar.innerHTML = `
+    <button onclick="scrollToActiveTop()" class="px-3 py-1 bg-slate-800 hover:bg-pink-600 text-slate-200 hover:text-white rounded-lg font-bold transition flex-shrink-0 border border-slate-700">
+      TOP
+    </button>
+  `;
+
+  // 1つのグループカードのHTMLを生成するヘルパー関数
+  const buildGroupCardHtml = (g) => {
     const groupMembers = allMembers.filter(m => String(m.group_id) === String(g.id));
-    
-    // グループ内のメンバー全員が表示状態（is_hidden が false または未定義）ならグループチェックON
     const isGroupAllVisible = groupMembers.length > 0 && groupMembers.every(m => !m.is_hidden);
 
     const membersHtml = groupMembers.map(m => {
-      const isVisible = !m.is_hidden; // is_hidden が false のとき「表示(ON)」
+      const isVisible = !m.is_hidden;
       return `
         <label class="flex items-center space-x-2 p-2 bg-slate-950/60 rounded-xl border border-slate-800/60 cursor-pointer hover:border-slate-700 transition">
           <input type="checkbox" ${isVisible ? 'checked' : ''} onchange="toggleUserMemberVisibility('${m.id}', !this.checked)" class="accent-pink-500 rounded">
@@ -362,7 +530,92 @@ function renderActiveManagement() {
         </div>
       </div>
     `;
-  }).join('');
+  };
+
+  // 1. あいうえお順モードの場合
+  if (sortMode === 'kana') {
+    const sortedGroups = [...allGroups].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja'));
+    container.innerHTML = `
+      <div class="space-y-4">
+        ${sortedGroups.map(g => buildGroupCardHtml(g)).join('')}
+      </div>
+    `;
+    return;
+  }
+
+  // 2. 拠点別モードの場合
+  if (sortMode === 'prefecture') {
+    const groupsByPref = {};
+    allGroups.forEach(g => {
+      const pref = g.prefecture || '拠点未設定';
+      if (!groupsByPref[pref]) groupsByPref[pref] = [];
+      groupsByPref[pref].push(g);
+    });
+
+    container.innerHTML = '';
+    Object.keys(groupsByPref).forEach(pref => {
+      const groupList = groupsByPref[pref];
+      const sectionId = `active-pref-${pref}`;
+
+      const jumpBtn = document.createElement('button');
+      jumpBtn.className = "px-3 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-lg transition flex-shrink-0 border border-slate-800 text-xs";
+      jumpBtn.textContent = `${pref} (${groupList.length})`;
+      jumpBtn.onclick = () => jumpToActiveSection(sectionId);
+      jumpBar.appendChild(jumpBtn);
+
+      const sectionDiv = document.createElement('div');
+      sectionDiv.id = sectionId;
+      sectionDiv.className = "space-y-3";
+      sectionDiv.innerHTML = `
+        <div class="flex items-center gap-3 border-b border-slate-800 pb-2">
+          <h3 class="text-sm font-extrabold text-pink-400">${pref}</h3>
+          <span class="text-[10px] text-slate-500 bg-slate-900 px-2 py-0.5 rounded-full">${groupList.length}グループ</span>
+        </div>
+        <div class="space-y-4">
+          ${groupList.map(g => buildGroupCardHtml(g)).join('')}
+        </div>
+      `;
+      container.appendChild(sectionDiv);
+    });
+    return;
+  }
+
+  // 3. 区分別モードの場合
+  if (sortMode === 'category') {
+    const groupsByCategory = {};
+    allGroups.forEach(g => {
+      const catKey = g.category || 'other';
+      if (!groupsByCategory[catKey]) groupsByCategory[catKey] = [];
+      groupsByCategory[catKey].push(g);
+    });
+
+    container.innerHTML = '';
+    Object.keys(groupsByCategory).forEach(catKey => {
+      const groupList = groupsByCategory[catKey];
+      const catLabel = (typeof CATEGORY_NAME_MAP !== 'undefined' && CATEGORY_NAME_MAP[catKey]) ? CATEGORY_NAME_MAP[catKey] : (catKey || '未分類');
+      const sectionId = `active-cat-${catKey}`;
+
+      const jumpBtn = document.createElement('button');
+      jumpBtn.className = "px-3 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-lg transition flex-shrink-0 border border-slate-800 text-xs";
+      jumpBtn.textContent = `${catLabel} (${groupList.length})`;
+      jumpBtn.onclick = () => jumpToActiveSection(sectionId);
+      jumpBar.appendChild(jumpBtn);
+
+      const sectionDiv = document.createElement('div');
+      sectionDiv.id = sectionId;
+      sectionDiv.className = "space-y-3";
+      sectionDiv.innerHTML = `
+        <div class="flex items-center gap-3 border-b border-slate-800 pb-2">
+          <h3 class="text-sm font-extrabold text-pink-400">${catLabel}</h3>
+          <span class="text-[10px] text-slate-500 bg-slate-900 px-2 py-0.5 rounded-full">${groupList.length}グループ</span>
+        </div>
+        <div class="space-y-4">
+          ${groupList.map(g => buildGroupCardHtml(g)).join('')}
+        </div>
+      `;
+      container.appendChild(sectionDiv);
+    });
+  }
 }
 
 /**
