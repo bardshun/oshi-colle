@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>推し一直線</title>
+
+  <!-- 🌟 1. Supabase JS SDK (common.jsより前に必ず読み込む) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- 🌟 2. Tailwind CSS (警告を抑止したい場合は ?plugins などを付与するかそのまま利用) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- html2canvas ライブラリ (結果画面の画像化用) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <style>
+    /* カスタムスクロールバー */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(31, 41, 55, 0.5);
+      border-radius: 8px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(75, 85, 99, 0.8);
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen pb-12">
+
+  <!-- 共通ヘッダー -->
+  <header id="app-header"></header>
+
+  <!-- メインコンテンツ (z-0でヘッダーの下層であることを明示) -->
+  <main class="max-w-md mx-auto p-4 space-y-4 relative z-0">
+    <div class="text-center space-y-1 pb-2">
+      <h2 class="text-2xl font-black tracking-wide flex items-center justify-center gap-2">
+        <span class="text-2xl">✨</span>
+        <span class="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-purple-300 to-rose-400">
+          推し一直線
+        </span>
+        <span class="text-2xl">✨</span>
+      </h2>
+    </div>
+
+    <!-- ================================================= -->
+    <!-- フェーズ 1: ウィザード設定画面                    -->
+    <!-- ================================================= -->
+    <div id="phase-wizard" class="bg-gray-950 p-5 rounded-2xl shadow-xl border border-gray-800 space-y-5">
+      
+      <!-- STEP 1: 属性入力 -->
+      <div id="wizard-step-1" class="space-y-5">
+        <div class="text-center space-y-1">
+          <span class="text-xs font-bold px-3 py-1 bg-sky-950 text-sky-400 border border-sky-800 rounded-full">STEP 1 / 3</span>
+          <h3 class="text-lg font-bold text-white pt-1">比較する2つの属性を入力</h3>
+          <p class="text-xs text-gray-400">対比させたい特徴を入力してください</p>
+        </div>
+
+        <!-- 横並び属性入力 -->
+        <div class="grid grid-cols-2 gap-3">
+          <!-- 属性A (左 / 青系) -->
+          <div class="p-3 bg-sky-950/40 border border-sky-500/50 rounded-xl space-y-2">
+            <div class="text-xs font-bold text-sky-400 flex items-center gap-1">
+              <span>👈</span> 属性 A (左側)
+            </div>
+            <input type="text" id="attr-a-input" value="きれい" placeholder="例: きれい" 
+              class="w-full bg-sky-900/40 border border-sky-500/60 rounded-lg px-3 py-2 text-sm font-bold text-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-400 text-center" />
+          </div>
+
+          <!-- 属性B (右 / ピンク系) -->
+          <div class="p-3 bg-rose-950/40 border border-rose-500/50 rounded-xl space-y-2">
+            <div class="text-xs font-bold text-rose-400 flex items-center gap-1">
+              属性 B (右側) <span>👉</span>
+            </div>
+            <input type="text" id="attr-b-input" value="かわいい" placeholder="例: かわいい" 
+              class="w-full bg-rose-900/40 border border-rose-500/60 rounded-lg px-3 py-2 text-sm font-bold text-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-400 text-center" />
+          </div>
+        </div>
+
+        <!-- プリセット -->
+        <div class="space-y-1.5">
+          <p class="text-xs text-gray-400 text-center">よく使われる組み合わせ:</p>
+          <div class="flex flex-wrap justify-center gap-1.5 text-xs">
+            <button type="button" onclick="setPreset('きれい', 'かわいい')" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 rounded-lg border border-gray-700 transition">きれい ↔ かわいい</button>
+            <button type="button" onclick="setPreset('かっこいい', 'バブい')" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 rounded-lg border border-gray-700 transition">かっこいい ↔ バブい</button>
+            <button type="button" onclick="setPreset('大人っぽい', '妹系')" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 rounded-lg border border-gray-700 transition">大人っぽい ↔ 妹系</button>
+          </div>
+        </div>
+
+        <button type="button" onclick="goToStep(2)" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg transition">
+          次へ（人数・条件設定） ➔
+        </button>
+      </div>
+
+      <!-- STEP 2: 人数・絞り込み設定 -->
+      <div id="wizard-step-2" class="space-y-5 hidden">
+        <div class="text-center space-y-1">
+          <span class="text-xs font-bold px-3 py-1 bg-sky-950 text-sky-400 border border-sky-800 rounded-full">STEP 2 / 3</span>
+          <h3 class="text-lg font-bold text-white pt-1">人数と対象絞り込み</h3>
+        </div>
+
+        <!-- 人数選択 -->
+        <div class="space-y-2">
+          <label class="text-xs font-bold text-gray-300">👥 比較人数</label>
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" id="btn-count-9" onclick="setTargetCount(9)" class="py-2.5 bg-indigo-600 text-white border border-indigo-500 font-bold text-sm rounded-xl transition">9名</button>
+            <button type="button" id="btn-count-12" onclick="setTargetCount(12)" class="py-2.5 bg-gray-800 text-gray-300 border border-gray-700 font-bold text-sm rounded-xl transition">12名</button>
+            <button type="button" id="btn-count-15" onclick="setTargetCount(15)" class="py-2.5 bg-gray-800 text-gray-300 border border-gray-700 font-bold text-sm rounded-xl transition">15名</button>
+          </div>
+        </div>
+
+        <!-- 絞り込み条件 -->
+        <div class="space-y-2 pt-2 border-t border-gray-800">
+          <div class="flex justify-between items-center">
+            <label class="text-xs font-bold text-gray-300">🔍 メンバー絞り込み (任意)</label>
+            <!-- 💡 該当件数の表示バッジを追加 -->
+            <span id="filtered-count-badge" class="text-xs font-bold text-sky-400 bg-sky-950 px-2 py-0.5 rounded-md border border-sky-800">
+              対象: 0名
+            </span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <!-- select の onchange で updateFilteredCount() を呼ぶ -->
+            <select id="filter-prefecture" onchange="updateFilteredCount(); renderMemberSelectGrid();" class="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded-xl p-2.5 focus:outline-none">
+              <option value="">拠点: すべて</option>
+            </select>
+            <select id="filter-category" onchange="updateFilteredCount(); renderMemberSelectGrid();" class="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded-xl p-2.5 focus:outline-none">
+              <option value="">区分: すべて</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button type="button" onclick="goToStep(1)" class="w-1/3 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-xl border border-gray-700 transition">⬅ 戻る</button>
+          <button type="button" onclick="goToStep(3)" class="w-2/3 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg transition">メンバー選択へ ➔</button>
+        </div>
+      </div>
+
+      <!-- STEP 3: メンバー選択 -->
+      <div id="wizard-step-3" class="space-y-4 hidden">
+        <div class="flex justify-between items-center pb-2 border-b border-gray-800">
+          <div>
+            <span class="text-xs font-bold text-sky-400">STEP 3 / 3</span>
+            <h3 class="text-base font-bold">メンバー選択</h3>
+          </div>
+          <span id="select-counter" class="text-sm font-extrabold text-indigo-400 bg-indigo-950 px-3 py-1 rounded-full border border-indigo-800">
+            0 / 9人
+          </span>
+        </div>
+
+        <div class="flex gap-2">
+          <button type="button" onclick="autoSelectFilteredMembers()" class="flex-1 py-2 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-600/40 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1">
+            🎲 絞り込みからおまかせ選択
+          </button>
+          <button type="button" onclick="clearSelectedMembers()" class="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 text-xs font-bold rounded-xl border border-gray-700 transition">
+            🧹 クリア
+          </button>
+        </div>
+
+        <!-- メンバーグリッド -->
+        <div id="member-select-grid" class="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-72 overflow-y-auto p-1 pr-1 custom-scrollbar">
+          <!-- JSで動的生成 -->
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button type="button" onclick="goToStep(2)" class="w-1/3 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-xl border border-gray-700 transition">⬅ 戻る</button>
+          <button type="button" onclick="startSortingGame()" class="w-2/3 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition">
+            ✨ 比較をスタート ➔
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ================================================= -->
+    <!-- フェーズ 2: 3グループ大まか振分け                -->
+    <!-- ================================================= -->
+    <div id="phase-classify" class="bg-gray-950 p-5 rounded-2xl shadow-xl border border-gray-800 space-y-4 hidden text-center">
+      <div class="space-y-1">
+        <span class="text-xs font-bold text-indigo-400 bg-indigo-950 px-3 py-1 rounded-full border border-indigo-800">
+          ステップ 1: 大まかに振分け (<span id="classify-progress">1/9</span>)
+        </span>
+        <h3 id="classify-member-name" class="text-xl font-extrabold text-white pt-2">メンバー名</h3>
+      </div>
+
+      <!-- メンバーカード -->
+      <div class="relative w-40 h-40 mx-auto rounded-2xl overflow-hidden border-2 border-indigo-500 shadow-xl">
+        <img id="classify-member-img" src="" class="w-full h-full object-cover" alt="" />
+        <div id="classify-member-group" class="absolute bottom-0 inset-x-0 bg-black/70 text-xs text-gray-300 py-1">所属グループ</div>
+      </div>
+
+      <!-- 3分岐ボタン -->
+      <div class="grid grid-cols-3 gap-2 pt-2">
+        <button type="button" onclick="classifyCurrentMember('A')" class="py-3 px-1 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-bold text-xs shadow-md border border-sky-400 flex flex-col items-center justify-center gap-1">
+          <span>👈</span>
+          <span id="btn-classify-a">きれい</span>
+        </button>
+        <button type="button" onclick="classifyCurrentMember('MID')" class="py-3 px-1 bg-gray-700 hover:bg-gray-600 text-gray-100 rounded-xl font-bold text-xs shadow-md border border-gray-500 flex flex-col items-center justify-center gap-1">
+          <span>⚖️</span>
+          <span>中間</span>
+        </button>
+        <button type="button" onclick="classifyCurrentMember('B')" class="py-3 px-1 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-bold text-xs shadow-md border border-rose-400 flex flex-col items-center justify-center gap-1">
+          <span>👉</span>
+          <span id="btn-classify-b">かわいい</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ================================================= -->
+    <!-- フェーズ 3: 2択比較                              -->
+    <!-- ================================================= -->
+    <div id="phase-compare" class="bg-gray-950 p-5 rounded-2xl shadow-xl border border-gray-800 space-y-4 hidden text-center">
+      <div class="space-y-1">
+        <span class="text-xs font-bold text-amber-400 bg-amber-950 px-3 py-1 rounded-full border border-amber-800">
+          ステップ 2: 2択比較で最終決定
+        </span>
+        <p id="compare-question-title" class="text-sm font-bold text-gray-200 pt-1">
+          どちらがより「<span id="compare-attr-target" class="text-sky-400">きれい</span>」寄り？
+        </p>
+      </div>
+
+      <!-- 2択カード並列 -->
+      <div class="grid grid-cols-2 gap-3 pt-2">
+        <!-- 選択肢 1 -->
+        <button type="button" id="btn-compare-1" class="group p-3 bg-gray-900 hover:bg-gray-800 border-2 border-gray-700 hover:border-sky-400 rounded-2xl transition text-center space-y-2">
+          <div class="w-24 h-24 mx-auto rounded-xl overflow-hidden border border-gray-600">
+            <img id="compare-img-1" src="" class="w-full h-full object-cover" alt="" />
+          </div>
+          <p id="compare-name-1" class="text-sm font-bold text-white group-hover:text-sky-300">メンバー1</p>
+        </button>
+
+        <!-- 選択肢 2 -->
+        <button type="button" id="btn-compare-2" class="group p-3 bg-gray-900 hover:bg-gray-800 border-2 border-gray-700 hover:border-rose-400 rounded-2xl transition text-center space-y-2">
+          <div class="w-24 h-24 mx-auto rounded-xl overflow-hidden border border-gray-600">
+            <img id="compare-img-2" src="" class="w-full h-full object-cover" alt="" />
+          </div>
+          <p id="compare-name-2" class="text-sm font-bold text-white group-hover:text-rose-300">メンバー2</p>
+        </button>
+      </div>
+    </div>
+
+    <!-- ================================================= -->
+    <!-- フェーズ 4: ジグザグ結果画面                     -->
+    <!-- ================================================= -->
+    <div id="phase-result" class="bg-gray-950 p-5 rounded-2xl shadow-xl border border-gray-800 space-y-6 hidden">
+      
+      <!-- 💡 画像キャプチャ対象のエリアをひとまとめにする (id="result-capture-area") -->
+      <div id="result-capture-area" class="p-4 bg-gray-950 rounded-2xl space-y-4">
+        <div class="text-center space-y-1">
+          <h3 class="text-lg font-bold flex items-center justify-center gap-1.5">
+            <span>🏆</span>
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-purple-300 to-rose-400">
+              推し一直線 結果
+            </span>
+            <span>🏆</span>
+          </h3>
+          <p class="text-xs text-gray-400">
+            【<span id="res-attr-a" class="text-sky-400 font-bold">きれい</span>】 ↔ 【<span id="res-attr-b" class="text-rose-400 font-bold">かわいい</span>】
+          </p>
+        </div>
+
+        <!-- ジグザグリスト表示コンテナ -->
+        <div id="zigzag-container" class="relative space-y-3 py-2">
+          <div class="absolute top-8 bottom-8 left-1/2 w-0.5 -translate-x-1/2 bg-gradient-to-b from-sky-500 via-purple-500 to-rose-500 -z-0 opacity-40"></div>
+        </div>
+      </div>
+
+      <!-- ボタンエリア -->
+      <div class="space-y-2 pt-2">
+        <!-- 💡 画像保存ボタン -->
+        <button type="button" id="download-image-btn" onclick="downloadResultImage()" class="w-full py-3 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2">
+          <span>🖼️</span> 画像として保存 (SNSにシェア)
+        </button>
+
+        <button type="button" onclick="resetToWizard()" class="w-full py-3 bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold rounded-xl border border-gray-700 transition">
+          🔄 別の条件でやり直す
+        </button>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- 共通スクリプト & 専用JS -->
+  <script src="js/common.js"></script>
+  <script src="js/straight.js"></script>
+</body>
+</html>

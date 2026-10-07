@@ -8,6 +8,60 @@ window.supabase = supabaseClient;
 
 console.log('推しコレ: Supabase connected!');
 
+// =========================================================
+// アプリ情報の一元管理マスターデータ
+// =========================================================
+window.APPS_DATA = [
+  // 🎮 アプリカテゴリ
+  {
+    id: 'tier',
+    name: 'Tier表作成',
+    icon: '📊',
+    path: 'tier.html',
+    desc: 'ドラッグ＆ドロップで自分だけの好きな顔Tier表を作成・保存',
+    category: 'app',
+    showInHeader: true
+  },
+  {
+    id: 'match',
+    name: '好きな顔共通点',
+    icon: '🤝',
+    path: 'match.html',
+    desc: '3人で遊ぶ！全員の好きな顔や個人の癖（ヘキ）をチェック',
+    category: 'app',
+    showInHeader: true
+  },
+  {
+    id: 'nine_select',
+    name: '好きな顔9選',
+    icon: '✨',
+    path: 'nine_select.html',
+    desc: '予選・本選・2択勝負であなたの「最高の顔9選」を決定・画像保存',
+    category: 'app',
+    showInHeader: true
+  },
+  {
+    id: 'straight',
+    name: '推し一直線',
+    icon: '📏',
+    path: 'straight.html',
+    desc: '2つの属性間でメンバーがどちら寄りかを2択比較で一列に並べる',
+    category: 'app',
+    showInHeader: true
+  },
+
+  // ⚙️ 管理カテゴリ
+  {
+    id: 'members',
+    name: 'メンバー＆グループ管理',
+    icon: '👥',
+    path: 'members.html',
+    desc: 'メンバー・写真の登録、グループ/店舗マスターの登録・変更',
+    category: 'manage',
+    showInHeader: true
+  }
+];
+
 // 💡 区分の表示名変換マップ（全体共通）
 const CATEGORY_NAME_MAP = {
   'idol': 'アイドル',
@@ -17,6 +71,11 @@ const CATEGORY_NAME_MAP = {
   'voice_actor': '声優',
   'other': 'その他'
 };
+
+
+// =========================================================
+// メイン処理
+// =========================================================
 
 /**
  * 区分コード（'idol' 等）を表示用名称（'アイドル'）に変換する共通ヘルパー
@@ -104,52 +163,58 @@ if (!document.getElementById('google-fonts-link')) {
   document.head.appendChild(style);
 }
 
-// タイムテーブルアプリ風 共通ヘッダーの自動生成
+// =========================================================
+// ヘッダーナビ & トップ画面自動生成処理
+// =========================================================
 document.addEventListener('DOMContentLoaded', () => {
+  // 1. 共通ヘッダーの生成
+  renderAppHeader();
+
+  // 2. index.html にいる場合、トップ画面のメニューを自動生成
+  if (document.getElementById('app-menu-container')) {
+    renderIndexAppMenu();
+  }
+});
+
+// 💡 共通ヘッダー生成関数
+function renderAppHeader() {
   const headerContainer = document.getElementById('app-header');
   if (!headerContainer) return;
 
   const currentPath = window.location.pathname.split('/').pop() || 'index.html';
 
-  const navItems = [
-    { name: '👥 メンバー・グループ', path: 'members.html' },
-    { name: '📊 Tier表', path: 'tier.html' },
-    { name: '🤝 共通点', path: 'match.html' },
-    { name: '✨ 好きな顔9選', path: 'nine_select.html' },
-  ];
+  // showInHeader が true のアプリを取得
+  const headerItems = window.APPS_DATA.filter(item => item.showInHeader);
 
   // PC用ナビHTML
-  const desktopNavHtml = navItems.map(item => {
+  const desktopNavHtml = headerItems.map(item => {
     const isActive = currentPath === item.path;
     const activeClass = isActive 
       ? 'bg-pink-600/20 text-pink-400 border-pink-500/50 font-bold shadow-[0_0_10px_rgba(236,72,153,0.3)]' 
       : 'text-gray-400 hover:text-white hover:bg-slate-800/60 border-transparent';
-    return `<a href="${item.path}" class="px-3 py-1.5 rounded-xl border text-xs sm:text-sm transition-all flex items-center gap-1 whitespace-nowrap ${activeClass}">${item.name}</a>`;
+    return `<a href="${item.path}" class="px-3 py-1.5 rounded-xl border text-xs sm:text-sm transition-all flex items-center gap-1.5 whitespace-nowrap ${activeClass}"><span>${item.icon}</span><span>${item.name}</span></a>`;
   }).join('');
 
   // スマホ用ドロップダウンメニューHTML
-  const mobileNavHtml = navItems.map(item => {
+  const mobileNavHtml = headerItems.map(item => {
     const isActive = currentPath === item.path;
     const activeClass = isActive 
       ? 'bg-pink-600/20 text-pink-400 font-bold border-l-4 border-pink-500' 
       : 'text-gray-300 hover:bg-slate-800/80';
-    return `<a href="${item.path}" class="block px-4 py-3 text-sm transition ${activeClass}">${item.name}</a>`;
+    return `<a href="${item.path}" class="block px-4 py-3 text-sm transition flex items-center gap-2 ${activeClass}"><span>${item.icon}</span><span>${item.name}</span></a>`;
   }).join('');
 
   headerContainer.className = "sticky top-0 z-[100] bg-slate-950/80 backdrop-blur-md border-b border-slate-800/80 px-4 py-3";
   headerContainer.innerHTML = `
     <div class="max-w-5xl mx-auto flex items-center justify-between relative">
-      <!-- 💡 タイトルエリア（whitespace-nowrap & shrink-0 で改行を強力防止） -->
       <a href="index.html" class="flex items-center space-x-2 group shrink-0">
         <span class="text-xl font-black bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-400 bg-clip-text text-transparent group-hover:opacity-80 transition whitespace-nowrap">推しコレ</span>
       </a>
 
-      <!-- 💡 PC表示用ナビ（md以上で表示） -->
       <nav class="hidden md:flex space-x-2">
         ${desktopNavHtml}
       </nav>
 
-      <!-- 💡 スマホ表示用ハンバーガーボタン（md未満で表示） -->
       <button id="mobile-menu-btn" class="md:hidden p-2 text-slate-300 hover:text-white hover:bg-slate-800/60 rounded-xl transition focus:outline-none" aria-label="メニューを開く">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path id="menu-icon-open" class="block" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
@@ -157,7 +222,6 @@ document.addEventListener('DOMContentLoaded', () => {
         </svg>
       </button>
 
-      <!-- 💡 スマホ用ドロップダウンメニュー本体 -->
       <div id="mobile-menu" class="hidden absolute top-full right-0 left-0 mt-2 bg-slate-900/95 border border-slate-800 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden z-50 md:hidden transition-all">
         <nav class="py-2 divide-y divide-slate-800/50">
           ${mobileNavHtml}
@@ -166,7 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
   `;
 
-  // ハンバーガーメニューの開閉イベント設定
+  // ハンバーガーイベント
   const menuBtn = document.getElementById('mobile-menu-btn');
   const mobileMenu = document.getElementById('mobile-menu');
   const iconOpen = document.getElementById('menu-icon-open');
@@ -176,7 +240,6 @@ document.addEventListener('DOMContentLoaded', () => {
     menuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const isOpen = !mobileMenu.classList.contains('hidden');
-      
       if (isOpen) {
         mobileMenu.classList.add('hidden');
         iconOpen.classList.remove('hidden');
@@ -188,7 +251,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // 画面外クリックでメニューを閉じる
     document.addEventListener('click', (e) => {
       if (!mobileMenu.contains(e.target) && !menuBtn.contains(e.target)) {
         mobileMenu.classList.add('hidden');
@@ -197,7 +259,39 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-});
+}
+
+// 💡 index.html用メニューカード生成関数
+function renderIndexAppMenu() {
+  const appContainer = document.getElementById('tab-app');
+  const manageContainer = document.getElementById('tab-manage');
+
+  if (!appContainer || !manageContainer) return;
+
+  const appCardsHtml = window.APPS_DATA
+    .filter(item => item.category === 'app')
+    .map(createCardHtml)
+    .join('');
+
+  const manageCardsHtml = window.APPS_DATA
+    .filter(item => item.category === 'manage')
+    .map(createCardHtml)
+    .join('');
+
+  appContainer.innerHTML = appCardsHtml;
+  manageContainer.innerHTML = manageCardsHtml;
+}
+
+// 単体カードHTMLレンダラー
+function createCardHtml(item) {
+  return `
+    <a href="${item.path}" class="bg-gray-800 p-6 rounded-xl border border-gray-700 hover:border-pink-500 transition block group">
+      <div class="text-3xl mb-2 transform group-hover:scale-110 transition duration-200">${item.icon}</div>
+      <h3 class="font-bold text-lg mb-1 text-white group-hover:text-pink-400 transition">${item.name}</h3>
+      <p class="text-xs text-gray-400 leading-relaxed">${item.desc}</p>
+    </a>
+  `;
+}
 
 // ==========================================
 // トーストメッセージ ユーティリティ
