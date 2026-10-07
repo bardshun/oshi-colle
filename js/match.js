@@ -60,7 +60,7 @@ async function startGame() {
   const selectedCategories = Array.from(document.querySelectorAll('.cat-checkbox:checked')).map(cb => cb.value);
 
   if (selectedPrefectures.length === 0 || selectedCategories.length === 0) {
-    alert('拠点と区分はそれぞれ最低1つ以上選択してください。');
+    showToast('拠点と区分は1つ以上選択してください。', 'warning');
     return;
   }
 
@@ -69,32 +69,21 @@ async function startGame() {
   document.getElementById('label-user-b').innerText = userNames.B;
   document.getElementById('label-user-c').innerText = userNames.C;
 
-  const user = (await supabase.auth.getUser())?.data?.user;
+  // 🌟 common.js の共通関数で設定適用済みのメンバー一覧を取得
+  const allCommonMembers = await fetchCommonMembers();
 
-  // Supabaseからメンバーと設定を取得
-  const [membersRes, settingsRes] = await Promise.all([
-    supabase
-      .from('members')
-      .select(`*, groups(name, prefecture, category), member_images(image_url, is_default)`),
-    user
-      ? supabase.from('user_member_settings').select('member_id, is_hidden').eq('user_id', user.id)
-      : Promise.resolve({ data: [] })
-  ]);
-
-  if (membersRes.error || !membersRes.data || membersRes.data.length === 0) {
-    alert('メンバーデータが取得できませんでした。');
+  if (!allCommonMembers || allCommonMembers.length === 0) {
+    showToast('メンバーデータの取得に失敗しました。', 'error');
     return;
   }
 
-  const settingsMap = new Map((settingsRes.data || []).map(s => [String(s.member_id), s.is_hidden]));
+  // 💡 ① 非表示メンバー除外（is_hidden === false） ＆ ② チェックされた拠点・区分に含まれるか判定
+  const filteredMembers = allCommonMembers.filter(m => {
+    // ログイン状況に応じた非表示判定（fetchCommonMembers側で m.is_hidden に反映済み）
+    if (m.is_hidden) return false;
 
-  // 💡 ① 非表示メンバー除外 ＆ ② チェックされた拠点・区分に含まれるか判定
-  const filteredMembers = membersRes.data.filter(m => {
-    const isHidden = settingsMap.get(String(m.id)) ?? false;
-    if (isHidden) return false;
-
-    const pref = m.groups?.prefecture;
-    const cat = m.groups?.category;
+    const pref = m.groups?.prefecture || m.prefecture;
+    const cat = m.groups?.category || m.category;
 
     // 拠点・区分がチェックに含まれているかチェック
     const matchesPref = pref ? selectedPrefectures.includes(pref) : true;
@@ -104,7 +93,7 @@ async function startGame() {
   });
 
   if (filteredMembers.length === 0) {
-    alert('選択された条件に一致する表示可能なメンバーがいません。選択を変更してください。');
+    showToast('選択された条件に一致する表示可能なメンバーがいません。選択を変更してください。', 'warning');
     return;
   }
 
@@ -128,8 +117,9 @@ function showCurrentMember() {
   }
 
   const m = membersList[currentIndex];
-  const defaultImg = m.member_images?.find(i => i.is_default) || m.member_images?.[0];
-  const imgUrl = defaultImg ? defaultImg.image_url : 'https://via.placeholder.com/300?text=No+Image';
+  
+  // 🌟 common.js (fetchCommonMembers) で判定済みのお気に入り/デフォルト画像URLを使用
+  const imgUrl = m.display_image_url || 'https://via.placeholder.com/300?text=No+Image';
 
   document.getElementById('current-member-img').src = imgUrl;
   document.getElementById('current-group-name').innerText = m.groups ? m.groups.name : '未所属';
@@ -212,9 +202,18 @@ function prevMember() {
 }
 
 // 💡 4-C. 途中で切り上げて結果を見る
-function finishGameEarly() {
+async function finishGameEarly() {
   if (matchResults.length === 0 && !currentLikes.A && !currentLikes.B && !currentLikes.C) {
-    if (!confirm('まだどのメンバーも選択されていませんが、結果画面に進みますか？')) {
+    const ok = await showConfirmModal({
+      title: '確認',
+      message: 'まだどのメンバーも選択されていませんが、結果画面に進みますか？',
+      confirmText: '結果画面へ進む',
+      cancelText: 'キャンセル',
+      type: 'warning',
+      showCancel: true
+    });
+
+    if (!ok) {
       return;
     }
   }
@@ -326,8 +325,8 @@ function renderMapNode(elementId, matchArray, isCrown = false) {
 
   container.innerHTML = matchArray.map(r => {
     const m = r.member;
-    const defaultImg = m.member_images?.find(i => i.is_default) || m.member_images?.[0];
-    const imgUrl = defaultImg ? defaultImg.image_url : 'https://via.placeholder.com/100';
+    // 🌟 common.js で設定された表示用画像URL（お気に入り画像優先）を使用
+    const imgUrl = m.display_image_url || 'https://via.placeholder.com/100';
 
     return `
       <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg overflow-hidden border ${isCrown ? 'border-yellow-400' : 'border-gray-700'} relative group shrink-0 bg-slate-950" title="${m.name}">
@@ -371,8 +370,8 @@ function switchResultView(viewType) {
 
 // 結果カードHTML作成共通化
 function createResultCardHtml(m) {
-  const defaultImg = m.member_images?.find(i => i.is_default) || m.member_images?.[0];
-  const imgUrl = defaultImg ? defaultImg.image_url : 'https://via.placeholder.com/150';
+  // 🌟 common.js で設定された表示用画像URL（お気に入り画像優先）を使用
+  const imgUrl = m.display_image_url || 'https://via.placeholder.com/150';
 
   return `
     <div class="bg-gray-900 rounded-xl overflow-hidden border border-gray-700/80 p-1 text-center shadow">
@@ -433,6 +432,6 @@ async function downloadResultImage() {
     if (typeof showToast === 'function') showToast('画像を保存しました！', 'success');
   } catch (err) {
     console.error('画像保存エラー:', err);
-    alert('画像の保存に失敗しました。');
+    showToast('画像の保存に失敗しました。', 'error');
   }
 }

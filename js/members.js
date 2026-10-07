@@ -1063,7 +1063,7 @@ window.toggleCurrentAsFavorite = function() {
 
 // 現在表示している画像を削除対象にする（モーダル内のみ。保存時に反映）
 // 4. 画像の削除（★ 0番目（最初）の画像は削除できないようにガード）
-window.removeCurrentMemberImage = function() {
+window.removeCurrentMemberImage = async function() {
   if (currentImageIndex === 0) {
     showToast('最初に登録されたメイン画像（0番目）は削除できません', 'error');
     return;
@@ -1072,7 +1072,18 @@ window.removeCurrentMemberImage = function() {
     showToast('最後の1枚は削除できません', 'error');
     return;
   }
-  if (!confirm('この画像を削除しますか？（「保存する」を押すと完全に反映されます）')) return;
+
+  // 🌟 confirm を showConfirmModal + await に置き換え
+  const ok = await showConfirmModal({
+    title: '画像の削除',
+    message: 'この画像を削除しますか？\n（「保存する」を押すと完全に反映されます）',
+    confirmText: '削除する',
+    cancelText: 'キャンセル',
+    type: 'danger',
+    showCancel: true
+  });
+
+  if (!ok) return;
 
   const removed = currentModalImages.splice(currentImageIndex, 1)[0];
   

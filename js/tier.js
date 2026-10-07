@@ -64,40 +64,19 @@ async function loadTierMembers() {
   console.log('データの読み込みを開始します...');
 
   try {
-    // ログインユーザー情報の取得
-    const user = (await supabase.auth.getUser())?.data?.user;
-
-    // 💡 members, groups, user_member_settings を並行取得
-    const [membersRes, groupsRes, settingsRes] = await Promise.all([
-      supabase
-        .from('members')
-        .select(`*, groups(id, name, prefecture, category), member_images(image_url, is_default)`)
-        .order('name'),
-      supabase
-        .from('groups')
-        .select(`*`)
-        .order('name'),
-      // ログイン済みの場合のみ設定テーブルを取得（未ログイン時は null）
-      user 
-        ? supabase.from('user_member_settings').select('member_id, is_hidden').eq('user_id', user.id)
-        : Promise.resolve({ data: [] })
+    // 💡 共通関数で設定適用済みのメンバー一覧を取得し、同時に groups テーブルも取得
+    const [processedMembers, groupsRes] = await Promise.all([
+      fetchCommonMembers(),
+      supabase.from('groups').select(`*`).order('name')
     ]);
 
-    if (membersRes.error) console.error('メンバー取得エラー:', membersRes.error);
     if (groupsRes.error) console.error('グループ取得エラー:', groupsRes.error);
-    if (settingsRes.error) console.error('表示設定取得エラー:', settingsRes.error);
 
-    const rawMembers = membersRes.data || [];
     allGroups = groupsRes.data || [];
 
-    // 💡 非表示設定（is_hidden）を Map 化
-    const settingsMap = new Map((settingsRes.data || []).map(s => [String(s.member_id), s.is_hidden]));
-
     // 💡 is_hidden が true のメンバーを最初から除外して allMembers に格納
-    allMembers = rawMembers.filter(m => {
-      const isHidden = settingsMap.get(String(m.id)) ?? false;
-      return !isHidden; // 表示対象（is_hidden === false）のみ残す
-    });
+    // (※ 未ログイン時は fetchCommonMembers 内で全メンバー is_hidden: false になっています)
+    allMembers = processedMembers.filter(m => !m.is_hidden);
 
     console.log(`取得完了: メンバー ${allMembers.length}件（非表示除外済）/ グループ ${allGroups.length}件`);
 
@@ -264,8 +243,8 @@ function renderPool() {
 
 // メンバーカードHTML生成（画像サイズ維持＆高さ自動調整による見切れ完全防止版）
 function createMemberCardHtml(m) {
-  const defaultImg = m.member_images?.find(i => i.is_default) || m.member_images?.[0];
-  const imgUrl = defaultImg ? defaultImg.image_url : 'https://via.placeholder.com/100?text=No+Img';
+  // 🌟 共通処理（fetchCommonMembers）で決定された表示用画像URLを使用
+  const imgUrl = m.display_image_url || 'https://via.placeholder.com/100?text=No+Img';
   const isSelected = selectedMemberData && selectedMemberData.id === String(m.id);
 
   return `

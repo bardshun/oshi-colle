@@ -209,8 +209,9 @@ function initToastContainer() {
 
   const container = document.createElement('div');
   container.id = 'toast-container';
-  // 画面右上に固定表示（スマホ時は画面幅に合わせて中央寄り）
-  container.className = 'fixed top-5 right-5 z-50 flex flex-col gap-2 max-w-xs sm:max-w-sm w-full pointer-events-none px-4 sm:px-0';
+  
+  // 🌟 top-5 を top-16 に変更して共通ヘッダー（高さ約14〜16相当）の下に移動
+  container.className = 'fixed top-20 right-5 z-50 flex flex-col gap-2 max-w-xs sm:max-w-sm w-full pointer-events-none px-4 sm:px-0';
   document.body.appendChild(container);
 }
 
@@ -484,4 +485,76 @@ async function compressImageFile(file, maxWidth = 800, maxHeight = 800, quality 
 
     reader.onerror = (err) => reject(err);
   });
+}
+
+/**
+ * 全アプリ共通：メンバー一覧＆ログイン設定（お気に入り画像・非表示設定）の統合取得関数
+ * @returns {Promise<Array>} 設定適用済みのメンバー配列
+ */
+async function fetchCommonMembers() {
+  try {
+    // 1. ログインユーザー情報の取得
+    const user = (await supabase.auth.getUser())?.data?.user;
+
+    // 2. メンバー情報（画像ID付き）と ログイン時のみユーザー設定 を並行取得
+    const [membersRes, settingsRes] = await Promise.all([
+      supabase
+        .from('members')
+        .select(`
+          *,
+          groups(id, name, prefecture, category),
+          member_images(id, image_url, is_default)
+        `)
+        .order('name'),
+      user
+        ? supabase.from('user_member_settings').select('member_id, is_hidden, favorite_image_id').eq('user_id', user.id)
+        : Promise.resolve({ data: [] })
+    ]);
+
+    if (membersRes.error) {
+      console.error('メンバー取得エラー:', membersRes.error);
+      return [];
+    }
+    if (settingsRes.error) {
+      console.error('表示設定取得エラー:', settingsRes.error);
+    }
+
+    const rawMembers = membersRes.data || [];
+    const settingsList = settingsRes.data || [];
+
+    // 3. 設定情報を member_id キーで Map 化
+    const settingsMap = new Map(settingsList.map(s => [String(s.member_id), s]));
+
+    // 4. 各メンバーに表示設定とお気に入り画像を統合
+    return rawMembers.map(m => {
+      const userSetting = settingsMap.get(String(m.id));
+
+      // --- 画像選択ロジック ---
+      let displayImage = null;
+
+      // ログイン済みでお気に入り画像(favorite_image_id)が指定されている場合
+      if (user && userSetting?.favorite_image_id) {
+        displayImage = m.member_images?.find(img => String(img.id) === String(userSetting.favorite_image_id));
+      }
+
+      // 未ログイン、またはお気に入り画像が未設定・存在しない場合はデフォルト(is_default)または先頭画像
+      if (!displayImage) {
+        displayImage = m.member_images?.find(img => img.is_default) || m.member_images?.[0] || null;
+      }
+
+      return {
+        ...m,
+        // ログイン済みなら個人設定の is_hidden、未ログインなら常に false (全員表示)
+        is_hidden: user ? (userSetting?.is_hidden ?? false) : false,
+        // 確定した表示用画像URL（各アプリの <img> src にそのまま使用可能）
+        display_image_url: displayImage ? displayImage.image_url : 'https://via.placeholder.com/150?text=No+Img',
+        // モーダル編集等で元の設定も参照できるよう保持
+        user_member_settings: userSetting || null
+      };
+    });
+
+  } catch (err) {
+    console.error('fetchCommonMembers 例外エラー:', err);
+    return [];
+  }
 }

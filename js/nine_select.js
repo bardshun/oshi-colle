@@ -49,6 +49,51 @@ async function initFilterOptions() {
   `).join('');
 }
 
+// タイトルヘッダー押下時：最初（設定画面）に戻る処理
+async function resetToSetup() {
+  const setupPhase = document.getElementById('phase-setup');
+  
+  // すでに設定画面（最初の画面）にいる場合は何もしない
+  if (setupPhase && !setupPhase.classList.contains('hidden')) {
+    return;
+  }
+
+  // 🌟 モーダル呼び出し (OKなら true, キャンセルなら false が返る)
+  const ok = await showConfirmModal({
+    title: '確認',
+    message: '選択状態をクリアして、最初の条件設定画面に戻りますか？',
+    confirmText: '戻る',
+    cancelText: 'キャンセル',
+    type: 'warning',
+    showCancel: true
+  });
+
+  if (!ok) return;
+
+  // 1. 各種データ・選択状態のリセット
+  if (typeof memberScores !== 'undefined') memberScores.clear();
+  if (typeof selectedQualifyingIds !== 'undefined') selectedQualifyingIds.clear();
+  if (typeof selectedMainIds !== 'undefined') selectedMainIds.clear();
+  
+  if (typeof matchQueue !== 'undefined') matchQueue = [];
+  if (typeof currentMatch !== 'undefined') currentMatch = null;
+  
+  currentQualifyingPageIndex = 0;
+  currentMainPageIndex = 0;
+
+  // 2. 全フェーズ画面を非表示にして、設定画面（phase-setup）のみ表示
+  const phases = ['phase-setup', 'phase-qualifying', 'phase-main', 'phase-match', 'phase-result'];
+  phases.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
+
+  setupPhase.classList.remove('hidden');
+
+  // 画面上部へスクロール
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 function toggleAllCheckboxes(containerId, isChecked) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -74,36 +119,38 @@ async function startNineSelect() {
   const selectedCategories = Array.from(document.querySelectorAll('.cat-checkbox:checked')).map(cb => cb.value);
 
   if (selectedPrefectures.length === 0 || selectedCategories.length === 0) {
-    alert('拠点と区分は1つ以上選択してください。');
+    showToast('拠点と区分は1つ以上選択してください。', 'warning');
     return;
   }
 
-  const user = (await supabase.auth.getUser())?.data?.user;
+  // 🌟 common.js の共通関数で設定適用済みのメンバー一覧を取得
+  const allCommonMembers = await fetchCommonMembers();
 
-  const [membersRes, settingsRes] = await Promise.all([
-    supabase.from('members').select(`*, groups(name, prefecture, category), member_images(image_url, is_default)`),
-    user ? supabase.from('user_member_settings').select('member_id, is_hidden').eq('user_id', user.id) : Promise.resolve({ data: [] })
-  ]);
-
-  if (membersRes.error || !membersRes.data) {
-    alert('メンバーデータの取得に失敗しました。');
+  if (!allCommonMembers || allCommonMembers.length === 0) {
+    showToast('メンバーデータの取得に失敗しました。', 'error');
     return;
   }
 
-  const settingsMap = new Map((settingsRes.data || []).map(s => [String(s.member_id), s.is_hidden]));
-
-  // 非表示除外＆フィルタリング＆ランダムシャッフル
-  allMembers = membersRes.data
+  // 💡 ① 非表示メンバー除外 ＆ ② 拠点・区分フィルター（フリー対応） ＆ ③ ランダムシャッフル
+  allMembers = allCommonMembers
     .filter(m => {
-      if (settingsMap.get(String(m.id)) ?? false) return false;
-      const pref = m.groups?.prefecture;
-      const cat = m.groups?.category;
-      return (!pref || selectedPrefectures.includes(pref)) && (!cat || selectedCategories.includes(cat));
+      // ログイン状況に応じた非表示判定
+      if (m.is_hidden) return false;
+
+      // 🌟 groups に設定がなければ members 直接のフィールドを参照するフォールバック処理
+      const pref = m.groups?.prefecture || m.prefecture;
+      const cat = m.groups?.category || m.category;
+
+      // 拠点・区分のチェック状態と照合
+      const matchesPref = pref ? selectedPrefectures.includes(pref) : true;
+      const matchesCat = cat ? selectedCategories.includes(cat) : true;
+
+      return matchesPref && matchesCat;
     })
     .sort(() => Math.random() - 0.5);
 
   if (allMembers.length < 9) {
-    alert('選択された条件に一致するメンバーが9名未満です。条件を広げてください。');
+    showToast('条件に一致するメンバーが9名未満です。条件を広げてください。', 'warning');
     return;
   }
 
@@ -127,6 +174,7 @@ async function startNineSelect() {
 /**
  * PHASE 1: 予選ページの描画
  */
+// 予選の画面描画
 function renderQualifyingPage() {
   const pageMembers = qualifyingPages[currentQualifyingPageIndex] || [];
   const totalPages = qualifyingPages.length;
@@ -142,8 +190,7 @@ function renderQualifyingPage() {
   grid.innerHTML = pageMembers.map(m => {
     const memberIdStr = String(m.id);
     const isSelected = selectedQualifyingIds.has(memberIdStr);
-    const defaultImg = m.member_images?.find(i => i.is_default) || m.member_images?.[0];
-    const imgUrl = defaultImg ? defaultImg.image_url : 'https://via.placeholder.com/100';
+    const imgUrl = m.display_image_url || 'https://via.placeholder.com/100';
 
     return `
       <div onclick="toggleQualifyingSelect('${memberIdStr}')" id="qual-card-${memberIdStr}" 
@@ -159,7 +206,21 @@ function renderQualifyingPage() {
     `;
   }).join('');
 
-  // ボタンの表示切替（次へ or 予選完了）
+  // 🌟 「前の9名へ」ボタンの表示・活性制御
+  const prevBtn = document.getElementById('qualifying-prev-btn');
+  if (prevBtn) {
+    const isFirstPage = currentQualifyingPageIndex === 0;
+    prevBtn.disabled = isFirstPage;
+    if (isFirstPage) {
+      prevBtn.classList.add('opacity-40', 'cursor-not-allowed');
+      prevBtn.classList.remove('hover:bg-slate-700');
+    } else {
+      prevBtn.classList.remove('opacity-40', 'cursor-not-allowed');
+      prevBtn.classList.add('hover:bg-slate-700');
+    }
+  }
+
+  // 「次の9名へ / 予選完了」ボタンの表示切り替え
   const nextBtn = document.getElementById('qualifying-next-btn');
   if (nextBtn) {
     if (currentQualifyingPageIndex < totalPages - 1) {
@@ -167,6 +228,25 @@ function renderQualifyingPage() {
     } else {
       nextBtn.innerText = `予選完了 → 本選へ (${selectedQualifyingIds.size}名選出)`;
     }
+  }
+}
+
+// 🌟 予選：前の9名へ
+function prevQualifyingPage() {
+  if (currentQualifyingPageIndex > 0) {
+    currentQualifyingPageIndex--;
+    renderQualifyingPage();
+  }
+}
+
+// 🌟 予選：次の9名へ / 本選進出
+function nextQualifyingPage() {
+  const totalPages = qualifyingPages.length;
+  if (currentQualifyingPageIndex < totalPages - 1) {
+    currentQualifyingPageIndex++;
+    renderQualifyingPage();
+  } else {
+    finishQualifying(); // 最終ページの場合は本選移行へ
   }
 }
 
@@ -189,6 +269,7 @@ function toggleQualifyingSelect(memberIdStr) {
   document.getElementById('qualifying-count').innerText = selectedQualifyingIds.size;
 }
 
+
 /**
  * 予選：次へ / 完了ボタン処理
  */
@@ -208,9 +289,9 @@ function handleQualifyingNext() {
 /**
  * 予選完了 → 本選へ
  */
-function finishQualifying() {
+async function finishQualifying() {
   if (selectedQualifyingIds.size < 9) {
-    alert('9選を決定するため、予選全体で少なくとも9名以上を選択してください！');
+    showToast('9選を決定するため、予選全体で少なくとも9名以上を選択してください！', 'warning');
     return;
   }
 
@@ -233,6 +314,7 @@ function finishQualifying() {
 /**
  * PHASE 2: 本選ページの描画
  */
+// 本選の画面描画
 function renderMainPage() {
   const pageMembers = mainPages[currentMainPageIndex] || [];
   const totalPages = mainPages.length;
@@ -247,8 +329,7 @@ function renderMainPage() {
   grid.innerHTML = pageMembers.map(m => {
     const memberIdStr = String(m.id);
     const isSelected = selectedMainIds.has(memberIdStr);
-    const defaultImg = m.member_images?.find(i => i.is_default) || m.member_images?.[0];
-    const imgUrl = defaultImg ? defaultImg.image_url : 'https://via.placeholder.com/100';
+    const imgUrl = m.display_image_url || 'https://via.placeholder.com/100';
 
     return `
       <div onclick="toggleMainSelect('${memberIdStr}')" id="main-card-${memberIdStr}" 
@@ -264,6 +345,21 @@ function renderMainPage() {
     `;
   }).join('');
 
+  // 🌟 「前の9名へ」ボタンの表示・活性制御
+  const prevBtn = document.getElementById('main-prev-btn');
+  if (prevBtn) {
+    const isFirstPage = currentMainPageIndex === 0;
+    prevBtn.disabled = isFirstPage;
+    if (isFirstPage) {
+      prevBtn.classList.add('opacity-40', 'cursor-not-allowed');
+      prevBtn.classList.remove('hover:bg-slate-700');
+    } else {
+      prevBtn.classList.remove('opacity-40', 'cursor-not-allowed');
+      prevBtn.classList.add('hover:bg-slate-700');
+    }
+  }
+
+  // 「次の9名へ / 決戦完了」ボタンの表示切り替え
   const nextBtn = document.getElementById('main-next-btn');
   if (nextBtn) {
     if (currentMainPageIndex < totalPages - 1) {
@@ -271,6 +367,25 @@ function renderMainPage() {
     } else {
       nextBtn.innerText = `厳選完了 → 決戦へ (${selectedMainIds.size}名選出)`;
     }
+  }
+}
+
+// 🌟 本選：前の9名へ
+function prevMainPage() {
+  if (currentMainPageIndex > 0) {
+    currentMainPageIndex--;
+    renderMainPage();
+  }
+}
+
+// 🌟 本選：次の9名へ / 決戦進出
+function nextMainPage() {
+  const totalPages = mainPages.length;
+  if (currentMainPageIndex < totalPages - 1) {
+    currentMainPageIndex++;
+    renderMainPage();
+  } else {
+    finishMain(); // 最終ページの場合は決戦移行へ
   }
 }
 
@@ -382,13 +497,14 @@ function showNextMatch() {
 
   const [mA, mB] = currentMatch;
 
-  const imgA = mA.member_images?.find(i => i.is_default)?.image_url || mA.member_images?.[0]?.image_url;
-  const imgB = mB.member_images?.find(i => i.is_default)?.image_url || mB.member_images?.[0]?.image_url;
+  // 🌟 common.js で設定された表示用画像URL（お気に入り画像優先）を使用
+  const imgA = mA.display_image_url || 'https://via.placeholder.com/100';
+  const imgB = mB.display_image_url || 'https://via.placeholder.com/100';
 
-  document.getElementById('match-img-a').src = imgA || 'https://via.placeholder.com/100';
+  document.getElementById('match-img-a').src = imgA;
   document.getElementById('match-name-a').innerText = mA.name;
 
-  document.getElementById('match-img-b').src = imgB || 'https://via.placeholder.com/100';
+  document.getElementById('match-img-b').src = imgB;
   document.getElementById('match-name-b').innerText = mB.name;
 }
 
@@ -419,8 +535,8 @@ function finishNineSelect() {
 
   const grid = document.getElementById('result-grid');
   grid.innerHTML = sortedMembers.map((m, index) => {
-    const defaultImg = m.member_images?.find(i => i.is_default) || m.member_images?.[0];
-    const imgUrl = defaultImg ? defaultImg.image_url : 'https://via.placeholder.com/100';
+    // 🌟 common.js で設定された表示用画像URL（お気に入り画像優先）を使用
+    const imgUrl = m.display_image_url || 'https://via.placeholder.com/100';
 
     return `
       <div class="relative rounded-xl overflow-hidden border border-slate-800 bg-slate-900 group aspect-square">
