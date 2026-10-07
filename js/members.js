@@ -1065,7 +1065,7 @@ window.toggleCurrentAsFavorite = function() {
 // 4. 画像の削除（★ 0番目（最初）の画像は削除できないようにガード）
 window.removeCurrentMemberImage = async function() {
   if (currentImageIndex === 0) {
-    showToast('最初に登録されたメイン画像（0番目）は削除できません', 'error');
+    showToast('最初に登録されたメイン画像は削除できません', 'error');
     return;
   }
   if (currentModalImages.length <= 1) {
