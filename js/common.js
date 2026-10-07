@@ -418,3 +418,70 @@ window.setAppUnlocked = function(status = true) {
     localStorage.removeItem('oshi_app_unlocked');
   }
 };
+
+/**
+ * 画像ファイルをリサイズ・圧縮するヘルパー関数
+ * @param {File} file - アップロードされた元の画像ファイル
+ * @param {number} maxWidth - 最大幅（ピクセル、デフォルト: 800）
+ * @param {number} maxHeight - 最大高（ピクセル、デフォルト: 800）
+ * @param {number} quality - 圧縮品質（0.0 〜 1.0、デフォルト: 0.8）
+ * @returns {Promise<File>} 圧縮・リサイズされた新しいFileオブジェクト
+ */
+async function compressImageFile(file, maxWidth = 800, maxHeight = 800, quality = 0.8) {
+  // 画像以外や、すでに小さなファイルの場合はそのまま返す等の分岐も可能ですが、
+  // ここでは確実に対象ファイルを処理します。
+  if (!file || !file.type.startsWith('image/')) {
+    return file;
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        // アスペクト比を維持したまま、指定サイズ内に収まるよう計算
+        if (width > maxWidth || height > maxHeight) {
+          if (width / height > maxWidth / maxHeight) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        // Canvasに描画してリサイズ
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // 指定した品質でBlob/Fileに変換（出力は軽く扱いやすい image/jpeg に統一）
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error('画像の圧縮に失敗しました。'));
+            return;
+          }
+          // 元のファイル名を引き継いだ新しいFileオブジェクトを作成
+          const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '') + '.jpg', {
+            type: 'image/jpeg',
+            lastModified: Date.now(),
+          });
+          resolve(compressedFile);
+        }, 'image/jpeg', quality);
+      };
+
+      img.onerror = (err) => reject(err);
+    };
+
+    reader.onerror = (err) => reject(err);
+  });
+}

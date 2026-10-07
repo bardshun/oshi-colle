@@ -3,6 +3,11 @@ let allGroups = [];
 let memberSelectedFile = null;
 let groupSelectedFile = null;
 let currentCardSize = 'lg'; // 初期サイズ: 大
+// 複数画像・お気に入り管理用の状態変数
+let currentModalImages = []; // [{id, image_url, is_default}, ...]
+let currentImageIndex = 0;   // 現在表示している画像のインデックス
+let currentFavoriteImageId = null; // ユーザーが選んだお気に入りの画像ID
+const MAX_IMAGES = 10;
 
 document.addEventListener('DOMContentLoaded', async () => {
   setupPasteHandler();
@@ -69,10 +74,10 @@ async function loadGroups() {
 async function loadMembers() {
   const user = (await supabase.auth.getUser())?.data?.user;
 
-  // 1. 全メンバー情報（マスター）を取得
+  // 1. 全メンバー情報（マスター）を取得（※ member_images に id を追加）
   const { data, error } = await supabase
     .from('members')
-    .select(`*, groups(*), member_images(image_url, is_default)`)
+    .select(`*, groups(*), member_images(id, image_url, is_default)`)
     .order('name');
 
   if (error) {
@@ -83,28 +88,33 @@ async function loadMembers() {
 
   const rawMembers = data || [];
 
-  // 2. ログインユーザー個人の表示設定を取得（ログイン時のみ）
+  // 2. ログインユーザー個人の表示設定を取得（※ favorite_image_id も取得対象に追加）
   let settingsMap = new Map();
   if (user) {
     const { data: userSettings, error: sError } = await supabase
       .from('user_member_settings')
-      .select('member_id, is_hidden')
+      .select('member_id, is_hidden, favorite_image_id')
       .eq('user_id', user.id);
 
     if (!sError && userSettings) {
-      // member_id をキーにして Map 化
-      settingsMap = new Map(userSettings.map(s => [String(s.member_id), s.is_hidden]));
+      // member_id をキーにして設定オブジェクト全体を Map 化
+      settingsMap = new Map(userSettings.map(s => [String(s.member_id), s]));
     }
   }
 
-  // 3. マスターデータに is_hidden（ユーザー設定）を結合
-  allMembers = rawMembers.map(m => ({
-    ...m,
-    // 保存データがあればその is_hidden を適用、無ければ false（表示）
-    is_hidden: settingsMap.has(String(m.id)) ? settingsMap.get(String(m.id)) : false
-  }));
+  // 3. マスターデータにユーザー設定（is_hidden, favorite_image_id）を結合
+  allMembers = rawMembers.map(m => {
+    const userSetting = settingsMap.get(String(m.id));
+    return {
+      ...m,
+      // 保存データがあればその is_hidden を適用、無ければ false（表示）
+      is_hidden: userSetting ? userSetting.is_hidden : false,
+      // モーダル側で判定しやすいよう user_member_settings も保持
+      user_member_settings: userSetting || null
+    };
+  });
 
-  // 💡 4. 描画処理の初期実行（もし初期化フローで個別に呼んでいない場合はここで同期）
+  // 4. 描画処理の初期実行
   if (typeof filterMembers === 'function') filterMembers();
   if (typeof renderActiveManagement === 'function') renderActiveManagement();
 }
@@ -132,8 +142,14 @@ function renderMembers(filteredList = null) {
   }
 
   container.innerHTML = list.map(m => {
-    const defaultImg = m.member_images?.find(i => i.is_default) || m.member_images?.[0];
+    // 🌟 お気に入り画像IDの取得
+    const favId = m.user_member_settings?.favorite_image_id;
+
+    // 🌟 1. お気に入り画像 -> 2. デフォルト画像 -> 3. 先頭画像の順で優先決定
+    const favImg = favId ? m.member_images?.find(i => String(i.id) === String(favId)) : null;
+    const defaultImg = favImg || m.member_images?.find(i => i.is_default) || m.member_images?.[0];
     const imgUrl = defaultImg ? defaultImg.image_url : 'https://via.placeholder.com/150?text=No+Img';
+
     const isGrad = m.status === 'graduated';
     const isHidden = m.is_hidden ?? false; // 💡 ユーザー非表示フラグ
     const groupName = m.groups ? m.groups.name : '未所属';
@@ -719,8 +735,11 @@ async function toggleMemberActive(memberId, isActive) {
 
 // 5. 画像プレビュー＆ペースト処理（メンバー / グループ両対応）
 function handleMemberFileSelect(e) {
-  const file = e.target.files[0];
-  if (file) setPreviewFile(file, 'member');
+  const files = Array.from(e.target.files);
+  if (files.length === 0) return;
+  addFilesToMemberModal(files);
+  // 同じファイルを続けて選択できるようにinputをリセット
+  e.target.value = '';
 }
 
 function handleGroupFileSelect(e) {
@@ -748,6 +767,35 @@ function setPreviewFile(file, target) {
   reader.readAsDataURL(file);
 }
 
+// 2. 共通のファイル追加＆上限チェック処理
+function addFilesToMemberModal(files) {
+  // 現在の枚数 ＋ 追加しようとする枚数が 10枚を超えるかチェック
+  if (currentModalImages.length + files.length > MAX_IMAGES) {
+    showToast(`画像は最大 ${MAX_IMAGES} 枚までしか登録できません（現在: ${currentModalImages.length}枚）`, 'error');
+    return;
+  }
+
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      // 新規追加したファイルは、保存時に区別できるように 'temp_' の仮IDを付与
+      const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+      
+      currentModalImages.push({
+        id: tempId,
+        image_url: e.target.result,
+        is_temp: true, // 新規追加の目印
+        file: file     // 後で圧縮・アップロードするために実ファイルを保持
+      });
+
+      // 新しく追加された画像へ自動でインデックスを移動してバナーを更新
+      currentImageIndex = currentModalImages.length - 1;
+      updateMemberImageBanner();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 async function pasteFromClipboard(target = null) {
   // target未指定の場合は、開いているモーダルを自動特定
   if (!target) {
@@ -758,13 +806,34 @@ async function pasteFromClipboard(target = null) {
     }
   }
 
+  // グループ側（従来通りの単一画像）の場合
+  if (target === 'group') {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const type = item.types.find(t => t.startsWith('image/'));
+        if (type) {
+          const blob = await item.getType(type);
+          setPreviewFile(new File([blob], "pasted_image.png", { type }), 'group');
+          return;
+        }
+      }
+      showToast('クリップボードに画像が見つかりませんでした', 'warning');
+    } catch (err) {
+      showToast('クリップボードの読み取り権限を許可してください', 'warning');
+    }
+    return;
+  }
+
+  // メンバー側（マルチ画像対応のペースト）
   try {
     const items = await navigator.clipboard.read();
     for (const item of items) {
       const type = item.types.find(t => t.startsWith('image/'));
       if (type) {
         const blob = await item.getType(type);
-        setPreviewFile(new File([blob], "pasted_image.png", { type }), target);
+        const file = new File([blob], "pasted_image.png", { type });
+        addFilesToMemberModal([file]);
         return;
       }
     }
@@ -839,19 +908,25 @@ window.closeGroupModal = function() {
 };
 
 // モーダル制御（メンバー）
+
 window.openMemberModal = function(memberId = null) {
   memberSelectedFile = null;
+  currentModalImages = [];
+  currentImageIndex = 0;
+  currentFavoriteImageId = null;
+
   const form = document.getElementById('member-form');
   if (form) form.reset();
 
   document.getElementById('member-id').value = memberId || '';
-  
-  const preview = document.getElementById('image-preview');
-  if (preview) {
-    preview.classList.add('hidden');
-    preview.src = '';
-  }
+
+  // プレビュー・バナー要素の初期化
+  const bannerContainer = document.getElementById('member-image-banner-container');
+  const bannerImg = document.getElementById('banner-preview-img');
   const placeholder = document.getElementById('upload-placeholder');
+
+  if (bannerContainer) bannerContainer.classList.add('hidden');
+  if (bannerImg) bannerImg.src = '';
   if (placeholder) placeholder.classList.remove('hidden');
 
   if (memberId) {
@@ -863,15 +938,28 @@ window.openMemberModal = function(memberId = null) {
       document.getElementById('member-category').value = m.category || '';
       document.getElementById('member-prefecture').value = m.prefecture || '';
       document.getElementById('member-tags').value = (m.tags || []).join(', ');
-      
+
       const radios = document.getElementsByName('member-status');
       radios.forEach(r => r.checked = (r.value === (m.status || 'active')));
 
-      const defaultImg = m.member_images?.find(i => i.is_default) || m.member_images?.[0];
-      if (defaultImg && preview) {
-        preview.src = defaultImg.image_url;
-        preview.classList.remove('hidden');
-        if (placeholder) placeholder.classList.add('hidden');
+      // 1. メンバーが持つ画像一覧を取得（ID・URLが揃った配列）
+      currentModalImages = m.member_images ? JSON.parse(JSON.stringify(m.member_images)) : [];
+
+      // 2. お気に入り画像IDの決定
+      const userSetting = m.user_member_settings;
+      currentFavoriteImageId = userSetting?.favorite_image_id || currentModalImages.find(i => i.is_default)?.id || currentModalImages[0]?.id || null;
+
+      // 🌟 3. お気に入り画像のインデックス（順番）を初期表示に設定
+      if (currentFavoriteImageId && currentModalImages.length > 0) {
+        const favIndex = currentModalImages.findIndex(img => String(img.id) === String(currentFavoriteImageId));
+        if (favIndex !== -1) {
+          currentImageIndex = favIndex;
+        }
+      }
+
+      // バナーUIを更新・表示
+      if (typeof updateMemberImageBanner === 'function') {
+        updateMemberImageBanner();
       }
     }
     document.getElementById('modal-title').innerText = 'メンバー編集';
@@ -894,6 +982,110 @@ window.closeMemberModal = function() {
   }
 };
 
+// バナーの表示内容（画像・ドット・❤の状態）を更新する関数
+function updateMemberImageBanner() {
+  const bannerContainer = document.getElementById('member-image-banner-container');
+  const bannerImg = document.getElementById('banner-preview-img');
+  const placeholder = document.getElementById('upload-placeholder');
+  const counterText = document.getElementById('image-counter-text');
+  const dotsContainer = document.getElementById('image-dots-container');
+  const favoriteBtn = document.getElementById('set-favorite-btn');
+
+  if (!currentModalImages || currentModalImages.length === 0) {
+    if (bannerContainer) bannerContainer.classList.add('hidden');
+    if (placeholder) placeholder.classList.remove('hidden');
+    return;
+  }
+
+  if (bannerContainer) bannerContainer.classList.remove('hidden');
+  if (placeholder) placeholder.classList.add('hidden');
+
+  // インデックスの安全化
+  if (currentImageIndex >= currentModalImages.length) {
+    currentImageIndex = currentModalImages.length - 1;
+  }
+  if (currentImageIndex < 0) currentImageIndex = 0;
+
+  const currentImgObj = currentModalImages[currentImageIndex];
+  if (bannerImg) bannerImg.src = currentImgObj.image_url;
+
+  // カウンター更新
+  if (counterText) {
+    counterText.innerText = `${currentImageIndex + 1} / ${currentModalImages.length} 枚`;
+  }
+
+  // ドットインジケーター生成
+  if (dotsContainer) {
+    dotsContainer.innerHTML = '';
+    currentModalImages.forEach((img, idx) => {
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.className = `w-2 h-2 rounded-full transition ${idx === currentImageIndex ? 'bg-pink-500 scale-125' : 'bg-slate-700 hover:bg-slate-500'}`;
+      dot.onclick = () => {
+        currentImageIndex = idx;
+        updateMemberImageBanner();
+      };
+      dotsContainer.appendChild(dot);
+    });
+  }
+
+  // ❤ お気に入りボタンの見た目切り替え（currentFavoriteImageId と一致しているか）
+  if (favoriteBtn) {
+    const isFav = currentImgObj.id === currentFavoriteImageId;
+    favoriteBtn.innerHTML = isFav ? '❤️' : '🤍';
+    favoriteBtn.title = isFav ? 'お気に入り設定中' : 'この画像をお気に入りに設定';
+    favoriteBtn.className = `absolute top-2 right-2 p-1.5 rounded-full text-sm transition shadow ${isFav ? 'bg-pink-600 text-white' : 'bg-slate-900/80 hover:bg-slate-900 text-slate-400'}`;
+  }
+}
+
+// 前の画像へ
+window.prevMemberImage = function() {
+  if (currentModalImages.length <= 1) return;
+  currentImageIndex = (currentImageIndex - 1 + currentModalImages.length) % currentModalImages.length;
+  updateMemberImageBanner();
+};
+
+// 次の画像へ
+window.nextMemberImage = function() {
+  if (currentModalImages.length <= 1) return;
+  currentImageIndex = (currentImageIndex + 1) % currentModalImages.length;
+  updateMemberImageBanner();
+};
+
+// 現在表示している画像を「お気に入り（メイン）」に指定
+window.toggleCurrentAsFavorite = function() {
+  const currentImgObj = currentModalImages[currentImageIndex];
+  if (!currentImgObj) return;
+  currentFavoriteImageId = currentImgObj.id;
+  updateMemberImageBanner();
+  showToast('お気に入り画像を切り替えました', 'success');
+};
+
+// 現在表示している画像を削除対象にする（モーダル内のみ。保存時に反映）
+// 4. 画像の削除（★ 0番目（最初）の画像は削除できないようにガード）
+window.removeCurrentMemberImage = function() {
+  if (currentImageIndex === 0) {
+    showToast('最初に登録されたメイン画像（0番目）は削除できません', 'error');
+    return;
+  }
+  if (currentModalImages.length <= 1) {
+    showToast('最後の1枚は削除できません', 'error');
+    return;
+  }
+  if (!confirm('この画像を削除しますか？（「保存する」を押すと完全に反映されます）')) return;
+
+  const removed = currentModalImages.splice(currentImageIndex, 1)[0];
+  
+  // もしお気に入りだったものが消えたら、0番目を新しいお気に入りに設定
+  if (removed.id === currentFavoriteImageId) {
+    currentFavoriteImageId = currentModalImages[0].id;
+  }
+  if (currentImageIndex >= currentModalImages.length) {
+    currentImageIndex = currentModalImages.length - 1;
+  }
+  updateMemberImageBanner();
+};
+
 
 // 7. 保存処理（Supabase）
 // 7. 保存処理（Supabase）- windowに登録して確実に呼び出せるようにする
@@ -909,6 +1101,7 @@ window.saveMember = async function(e) {
     saveBtn.classList.add('opacity-50', 'cursor-not-allowed');
   }
 
+  // フォームからの基本情報の取得
   const id = document.getElementById('member-id').value;
   const name = document.getElementById('member-name').value;
   const ruby = document.getElementById('member-ruby').value;
@@ -926,6 +1119,7 @@ window.saveMember = async function(e) {
 
   try {
     let memberData;
+    // 1. メンバー基本情報の保存（新規 or 更新）
     if (id) {
       const { data, error } = await supabase.from('members').update(payload).eq('id', id).select().single();
       if (error) throw error;
@@ -936,19 +1130,112 @@ window.saveMember = async function(e) {
       memberData = data;
     }
 
-    if (memberSelectedFile && memberData) {
-      const filePath = `members/${memberData.id}_${Date.now()}`;
-      const { data: uploadData, error: uploadErr } = await supabase.storage.from('member-images').upload(filePath, memberSelectedFile);
-      if (uploadErr) throw uploadErr;
+    if (memberData) {
+      // 2. マルチ画像（member_images）の同期処理
+      // データベース上に既存の画像一覧を取得
+      const { data: existingDbImages, error: fetchErr } = await supabase
+        .from('member_images')
+        .select('*')
+        .eq('member_id', memberData.id);
 
-      if (uploadData) {
-        const { data: urlData } = supabase.storage.from('member-images').getPublicUrl(filePath);
-        await supabase.from('member_images').insert([{ member_id: memberData.id, image_url: urlData.publicUrl, is_default: true }]);
+      if (fetchErr) throw fetchErr;
+
+      const existingDbIds = existingDbImages.map(img => img.id);
+      const currentModalIds = currentModalImages
+        .filter(img => !img.is_temp)
+        .map(img => img.id);
+
+      // (A) モーダル上で削除された画像をデータベース側でも削除
+      const idsToDelete = existingDbIds.filter(dbId => !currentModalIds.includes(dbId));
+      if (idsToDelete.length > 0) {
+        const { error: delErr } = await supabase
+          .from('member_images')
+          .delete()
+          .in('id', idsToDelete);
+        if (delErr) throw delErr;
+      }
+
+      // (B) 新規追加されたファイル（is_temp: true）を圧縮・ストレージアップロード・DBインサート
+      let resolvedFavoriteId = currentFavoriteImageId;
+
+      for (let i = 0; i < currentModalImages.length; i++) {
+        const img = currentModalImages[i];
+
+        if (img.is_temp && img.file) {
+          // 圧縮処理（最大800px、画質80%）
+          const compressedFile = await compressImageFile(img.file, 800, 800, 0.8);
+          const filePath = `members/${memberData.id}_${Date.now()}_${i}`;
+          
+          const { data: uploadData, error: uploadErr } = await supabase.storage
+            .from('member-images')
+            .upload(filePath, compressedFile);
+          
+          if (uploadErr) throw uploadErr;
+
+          const { data: urlData } = supabase.storage
+            .from('member-images')
+            .getPublicUrl(filePath);
+
+          // member_images テーブルへ保存
+          const { data: newImgData, error: imgInsErr } = await supabase
+            .from('member_images')
+            .insert([{
+              member_id: memberData.id,
+              image_url: urlData.publicUrl
+            }])
+            .select()
+            .single();
+
+          if (imgInsErr) throw imgInsErr;
+
+          // もし今回追加した一時画像がお気に入りに指定されていたら、正式なDBのIDに差し替え
+          if (img.id === currentFavoriteImageId) {
+            resolvedFavoriteId = newImgData.id;
+          }
+        }
+      }
+
+      // (C) お気に入り画像IDのフォールバック解決（未指定・または消えた場合）
+      if (!resolvedFavoriteId) {
+        const { data: finalImgs } = await supabase
+          .from('member_images')
+          .select('id')
+          .eq('member_id', memberData.id)
+          .order('id', { ascending: true })
+          .limit(1);
+        
+        if (finalImgs && finalImgs.length > 0) {
+          resolvedFavoriteId = finalImgs[0].id;
+        }
+      }
+
+      // 3. ユーザーごとの設定（user_member_settings）にお気に入り画像IDを保存・更新
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const settingPayload = {
+          user_id: user.id,
+          member_id: memberData.id,
+          favorite_image_id: resolvedFavoriteId || null
+        };
+
+        const { error: settingError } = await supabase
+          .from('user_member_settings')
+          .upsert(settingPayload, {
+            onConflict: 'user_id,member_id'
+          });
+
+        if (settingError) {
+          console.error('Settings Upsert Error:', settingError);
+        }
       }
     }
 
     closeMemberModal();
-    await loadAllData();
+    if (typeof loadAllData === 'function') {
+      await loadAllData();
+    }
+    showToast('保存しました', 'success');
+
   } catch (err) {
     console.error('メンバー保存エラー:', err);
     showToast('保存に失敗しました: ' + (err.message || 'エラーが発生しました'), 'error');

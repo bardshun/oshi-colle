@@ -209,18 +209,49 @@
       <form id="member-form" onsubmit="saveMember(event)" class="space-y-4">
         <input type="hidden" id="member-id">
 
-        <!-- 画像アップロード・プレビュー領域 -->
+        <!-- 画像アップロード・プレビュー領域（マルチ画像対応版） -->
         <div>
-          <label class="block text-xs text-slate-400 mb-1">顔写真 (メイン画像)</label>
-          <div id="member-paste-area" class="border-2 border-dashed border-slate-700 hover:border-pink-500 rounded-xl p-4 text-center cursor-pointer transition relative bg-slate-950">
-            <img id="image-preview" class="max-h-40 mx-auto rounded-lg mb-2 hidden object-cover" src="" alt="preview">
+          <label class="block text-xs text-slate-400 mb-1">顔写真 (複数登録可能・❤でメイン切替)</label>
+          
+          <!-- 画像スワイパー／バナー表示コンテナ -->
+          <div id="member-image-banner-container" class="relative bg-slate-950 border border-slate-800 rounded-xl overflow-hidden mb-2 hidden">
+            <div class="relative h-44 flex items-center justify-center bg-black/40">
+              <img id="banner-preview-img" class="max-h-44 mx-auto object-contain" src="" alt="member image">
+              
+              <!-- 左右スライド・切り替えボタン -->
+              <button type="button" onclick="prevMemberImage()" class="absolute left-2 bg-black/60 hover:bg-black/80 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs transition">◀</button>
+              <button type="button" onclick="nextMemberImage()" class="absolute right-2 bg-black/60 hover:bg-black/80 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs transition">▶</button>
+              
+              <!-- ❤ お気に入り（メイン）設定ボタン -->
+              <button type="button" id="set-favorite-btn" onclick="toggleCurrentAsFavorite()" class="absolute top-2 right-2 bg-slate-900/80 hover:bg-slate-900 text-slate-400 p-1.5 rounded-full text-sm transition shadow" title="この画像をお気に入りに設定">
+                🤍
+              </button>
+              
+              <!-- 🗑 削除ボタン（必要に応じて） -->
+              <button type="button" onclick="removeCurrentMemberImage()" class="absolute top-2 left-2 bg-slate-900/80 hover:bg-red-900/80 text-slate-400 hover:text-white p-1.5 rounded-full text-xs transition shadow" title="この画像を削除">
+                🗑️
+              </button>
+            </div>
+            
+            <!-- ドットインジケーター ＆ カウント表示 -->
+            <div class="py-2 bg-slate-900/90 flex flex-col items-center justify-center gap-1 border-t border-slate-800">
+              <div id="image-dots-container" class="flex space-x-1.5">
+                <!-- 動的にドットが生成されます -->
+              </div>
+              <span id="image-counter-text" class="text-[10px] text-slate-400">1 / 1 枚</span>
+            </div>
+          </div>
+
+          <!-- 新規追加用のドロップ・選択エリア -->
+          <div id="member-paste-area" class="border-2 border-dashed border-slate-700 hover:border-pink-500 rounded-xl p-3 text-center cursor-pointer transition relative bg-slate-950">
             <div id="upload-placeholder" class="space-y-1">
-              <div class="text-2xl">📷</div>
-              <p class="text-xs text-slate-300 font-bold">ファイルをドロップ または 長押しペースト</p>
+              <div class="text-xl">📷</div>
+              <p class="text-xs text-slate-300 font-bold">画像を追加（ドロップ または ペースト）</p>
               <p class="text-[10px] text-slate-500">クリックしてアルバムから選択</p>
             </div>
-            <input type="file" id="image-file-input" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer" onchange="handleMemberFileSelect(event)">
+            <input type="file" id="image-file-input" accept="image/*" multiple class="absolute inset-0 opacity-0 cursor-pointer" onchange="handleMemberFileSelect(event)">
           </div>
+          
           <button type="button" onclick="pasteFromClipboard('member')" class="mt-2 w-full text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 py-1.5 rounded-lg border border-slate-700 transition">
             📋 クリップボードから画像を貼り付け
           </button>
