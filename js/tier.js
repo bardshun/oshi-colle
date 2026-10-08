@@ -506,8 +506,8 @@ window.openTierPreviewModal = function() {
               ${tier.name}
             </div>
 
-            <!-- ドロップエリア -->
-            <div class="flex-1 p-2 flex flex-nowrap items-center gap-2 bg-gray-900/80">
+            <!-- 🌟 ドロップエリア: flex-nowrap から flex-wrap に変更して折り返し対応 -->
+            <div class="flex-1 p-2 flex flex-wrap items-center content-start gap-2 bg-gray-900/80">
               ${clonedChildrenHtml || '<span class="text-xs text-gray-600 pl-2">なし</span>'}
             </div>
           </div>
@@ -533,6 +533,7 @@ window.openTierPreviewModal = function() {
     // 3. 枠線の微調整（必要に応じて）
     card.style.height = '70px'; // モーダル出力時のカード高さを固定
     card.style.width = '56px';  // モーダル出力時のカード幅を固定
+    card.style.flexShrink = '0'; // 折り返し時にカードが潰れるのを防止
   });
 
   // 不要な削除ボタン等の非表示処理
