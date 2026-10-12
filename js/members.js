@@ -7,6 +7,8 @@ let currentCardSize = 'lg'; // 初期サイズ: 大
 let currentModalImages = []; // [{id, image_url, is_default}, ...]
 let currentImageIndex = 0;   // 現在表示している画像のインデックス
 let currentFavoriteImageId = null; // ユーザーが選んだお気に入りの画像ID
+let isCardColorEnabled = true;
+
 const MAX_IMAGES = 10;
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -74,7 +76,7 @@ async function loadGroups() {
 async function loadMembers() {
   const user = (await supabase.auth.getUser())?.data?.user;
 
-  // 1. 全メンバー情報（マスター）を取得（※ member_images に id を追加）
+  // 1. 全メンバー情報（マスター）を取得
   const { data, error } = await supabase
     .from('members')
     .select(`*, groups(*), member_images(id, image_url, is_default)`)
@@ -88,12 +90,12 @@ async function loadMembers() {
 
   const rawMembers = data || [];
 
-  // 2. ログインユーザー個人の表示設定を取得（※ favorite_image_id も取得対象に追加）
+  // 2. ログインユーザー個人の表示設定を取得（※ my_memo, met_date も追加で取得）
   let settingsMap = new Map();
   if (user) {
     const { data: userSettings, error: sError } = await supabase
       .from('user_member_settings')
-      .select('member_id, is_hidden, favorite_image_id')
+      .select('member_id, is_hidden, favorite_image_id, my_memo, met_date')
       .eq('user_id', user.id);
 
     if (!sError && userSettings) {
@@ -102,13 +104,15 @@ async function loadMembers() {
     }
   }
 
-  // 3. マスターデータにユーザー設定（is_hidden, favorite_image_id）を結合
+  // 3. マスターデータにユーザー設定（is_hidden, my_memo, met_date 等）を結合
   allMembers = rawMembers.map(m => {
     const userSetting = settingsMap.get(String(m.id));
     return {
       ...m,
-      // 保存データがあればその is_hidden を適用、無ければ false（表示）
+      // 保存データがあればその値を適用、無ければデフォルト値
       is_hidden: userSetting ? userSetting.is_hidden : false,
+      my_memo: userSetting ? userSetting.my_memo : '',
+      met_date: userSetting ? userSetting.met_date : '',
       // モーダル側で判定しやすいよう user_member_settings も保持
       user_member_settings: userSetting || null
     };
@@ -120,7 +124,7 @@ async function loadMembers() {
 }
 
 // 2. メンバー描画 & フィルター
-function renderMembers(filteredList = null) {
+window.renderMembers = function(filteredList = null) {
   const container = document.getElementById('members-list');
   const list = filteredList || allMembers;
 
@@ -141,6 +145,19 @@ function renderMembers(filteredList = null) {
     container.className = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3";
   }
 
+  // 💡 担当カラーに応じた「フッター部分（テキストエリア）の薄い背景色」の定義
+  const colorFooterMap = {
+    red:    'background-color: rgba(220, 38, 38, 0.2);',
+    blue:   'background-color: rgba(37, 99, 235, 0.2);',
+    green:  'background-color: rgba(5, 150, 105, 0.2);',
+    yellow: 'background-color: rgba(217, 119, 6, 0.2);',
+    pink:   'background-color: rgba(219, 39, 119, 0.2);',
+    purple: 'background-color: rgba(147, 51, 234, 0.2);',
+    orange: 'background-color: rgba(234, 88, 12, 0.2);',
+    white:  'background-color: rgba(100, 116, 139, 0.2);',
+    black:  'background-color: rgba(63, 63, 70, 0.6);'
+  };
+
   container.innerHTML = list.map(m => {
     // 🌟 お気に入り画像IDの取得
     const favId = m.user_member_settings?.favorite_image_id;
@@ -154,16 +171,22 @@ function renderMembers(filteredList = null) {
     const isHidden = m.is_hidden ?? false; // 💡 ユーザー非表示フラグ
     const groupName = m.groups ? m.groups.name : '未所属';
 
-    // 💡 非表示・卒業時の見た目スタイル（非表示ならモノクロ＋透明化）
+    // 💡 非表示・卒業時の見た目スタイル
     const hiddenStyle = isHidden ? 'opacity-40 grayscale hover:opacity-70' : (isGrad ? 'opacity-60' : '');
+
+    // 💡 担当カラー着色が有効かつカラーが設定されている場合のフッター背景スタイル適用
+    let footerStyle = 'background-color: rgba(15, 23, 42, 0.8);'; // bg-slate-900相当
+    if (isCardColorEnabled && m.color_category && colorFooterMap[m.color_category]) {
+      footerStyle = colorFooterMap[m.color_category];
+    }
 
     // --- パターン1: 小（画像なし・シンプル表示） ---
     if (currentCardSize === 'sm') {
       return `
-        <div onclick="openMemberModal(${m.id})" class="bg-slate-900/90 border border-slate-800 hover:border-pink-500/60 p-2 rounded-xl transition cursor-pointer relative ${hiddenStyle}">
+        <div onclick="openMemberModal(${m.id})" style="${footerStyle}" class="border border-slate-800 hover:border-pink-500/60 p-2 rounded-xl transition cursor-pointer relative ${hiddenStyle}">
           ${isHidden ? '<span class="text-[8px] text-slate-400 block font-bold">🙈 非表示</span>' : ''}
-          <div class="text-[9px] text-pink-400 font-bold truncate">${groupName}</div>
-          <div class="font-bold text-xs text-slate-100 truncate">${m.name}</div>
+          <div class="text-[9px] text-pink-400 font-bold truncate" style="-webkit-text-stroke: 0.4px #000; paint-order: stroke fill;">${groupName}</div>
+          <div class="font-bold text-xs text-slate-100 truncate" style="-webkit-text-stroke: 0.5px #000; paint-order: stroke fill;">${m.name}</div>
           ${isGrad ? '<span class="text-[8px] text-gray-500 block">卒業</span>' : ''}
         </div>
       `;
@@ -184,38 +207,54 @@ function renderMembers(filteredList = null) {
               ✏️
             </button>
           </div>
-          <div class="p-1.5">
-            <div class="text-[8px] text-pink-400 font-bold truncate">${groupName}</div>
-            <div class="font-extrabold text-xs text-slate-100 truncate">${m.name}</div>
+          <!-- 💡 フッター部分にカラーを反映 ＋ 文字に黒のアウトライン（縁取り）を適用 -->
+          <div style="${footerStyle}" class="p-1.5 border-t border-slate-800/50">
+            <div class="text-[8px] text-pink-400 font-bold truncate" style="-webkit-text-stroke: 0.4px #000; paint-order: stroke fill;">${groupName}</div>
+            <div class="font-extrabold text-xs text-slate-100 truncate" style="-webkit-text-stroke: 0.6px #000; paint-order: stroke fill;">${m.name}</div>
           </div>
         </div>
       `;
     }
 
-    // --- パターン3: 大（今のデフォルトサイズ） ---
+    // --- パターン3: 大（サイズ大・Xボタン対応） ---
     return `
       <div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-lg group hover:border-pink-500/50 transition relative ${hiddenStyle}">
         <div class="aspect-square bg-slate-950 relative overflow-hidden">
           <img src="${imgUrl}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+          
           ${isHidden ? `
             <span class="absolute top-2 left-2 bg-slate-950/80 text-slate-300 border border-slate-700 text-[9px] px-1.5 py-0.5 rounded-md font-bold backdrop-blur-sm z-10">
               🙈 非表示中
             </span>
           ` : ''}
-          <button onclick="openMemberModal(${m.id})" class="absolute top-2 right-2 bg-slate-950/80 hover:bg-pink-600 text-white text-[10px] px-2 py-1 rounded-lg border border-slate-700 backdrop-blur-sm transition z-10">
-            ✏️ 編集
-          </button>
+
+          <!-- 右上のアクションボタン群（編集 ＆ Xリンク） -->
+          <div class="absolute top-2 right-2 flex items-center gap-1 z-10">
+            ${m.x_url ? `
+              <a href="${m.x_url}" target="_blank" rel="noopener noreferrer" 
+                 onclick="event.stopPropagation()"
+                 class="bg-black/80 hover:bg-slate-900 text-white text-[10px] px-2 py-1 rounded-lg border border-slate-700 backdrop-blur-sm transition shadow flex items-center justify-center font-bold"
+                 title="X (Twitter) を開く">
+                𝕏
+              </a>
+            ` : ''}
+            <button onclick="openMemberModal(${m.id})" class="bg-slate-950/80 hover:bg-pink-600 text-white text-[10px] px-2 py-1 rounded-lg border border-slate-700 backdrop-blur-sm transition shadow">
+              ✏️ 編集
+            </button>
+          </div>
+
           ${isGrad ? '<span class="absolute bottom-2 left-2 bg-slate-950/80 text-gray-400 text-[9px] px-1.5 py-0.5 rounded border border-slate-700">卒業/離籍</span>' : ''}
         </div>
-        <div class="p-3">
-          <div class="text-[10px] text-pink-400 font-bold truncate">${groupName}</div>
-          <div class="font-extrabold text-sm text-slate-100 truncate">${m.name}</div>
-          ${m.ruby ? `<div class="text-[9px] text-slate-400 truncate">${m.ruby}</div>` : ''}
+        <!-- 💡 フッター部分にカラーを反映 ＋ 文字に黒のアウトライン（縁取り）を適用 -->
+        <div style="${footerStyle}" class="p-3 border-t border-slate-800/50">
+          <div class="text-[10px] text-pink-400 font-bold truncate" style="-webkit-text-stroke: 1.4px #000; paint-order: stroke fill;">${groupName}</div>
+          <div class="font-extrabold text-sm text-slate-100 truncate" style="-webkit-text-stroke: 3.5px #000; paint-order: stroke fill;">${m.name}</div>
+          ${m.ruby ? `<div class="text-[9px] text-slate-400 truncate" style="-webkit-text-stroke: 1.3px #000; paint-order: stroke fill;">${m.ruby}</div>` : ''}
         </div>
       </div>
     `;
   }).join('');
-}
+};
 
 // 複合フィルター処理
 window.filterMembers = function() {
@@ -229,6 +268,11 @@ window.filterMembers = function() {
   
   const showActive = document.getElementById('status-active-chk')?.checked;
   const showGraduated = document.getElementById('status-graduated-chk')?.checked;
+
+  // 💡 選択されている（有効な）担当カラーのリストを取得
+  const activeColorFilters = Array.from(document.querySelectorAll('.color-filter-pill'))
+    .filter(btn => !btn.classList.contains('opacity-40'))
+    .map(btn => btn.getAttribute('data-color'));
 
   let filtered = allMembers.filter(m => {
     const g = m.groups ? allGroups.find(x => x.id === m.group_id) : null;
@@ -252,23 +296,31 @@ window.filterMembers = function() {
     if (status === 'active' && showActive) matchStatus = true;
     if (status === 'graduated' && showGraduated) matchStatus = true;
 
-    // 💡 3. 表示設定（is_hidden）フィルタ判定
-    // デフォルト（選択なし、または visible）のときは「表示(is_hidden === false)」のみ抽出
-    // "hidden" のときは「非表示(is_hidden === true)」のみ抽出
-    // "all" 等を追加する場合は全件ヒット
+    // 💡 3. 担当カラーフィルター判定
+    let matchColor = true;
+    const allPills = document.querySelectorAll('.color-filter-pill');
+    const enabledPillsCount = activeColorFilters.length;
+
+    if (enabledPillsCount === 0) {
+      matchColor = false; 
+    } else if (enabledPillsCount < allPills.length) {
+      const memberColor = m.color_category || '';
+      matchColor = activeColorFilters.includes(memberColor);
+    }
+
+    // 4. 表示設定（is_hidden）フィルタ判定
     const isHidden = m.is_hidden ?? false;
     let matchVisibility = true;
     
     if (visibilityVal === 'visible') {
-      matchVisibility = !isHidden; // 表示対象のみ
+      matchVisibility = !isHidden; 
     } else if (visibilityVal === 'hidden') {
-      matchVisibility = isHidden;  // 非表示のみ
+      matchVisibility = isHidden;  
     } else if (visibilityVal === '') {
-      // 💡 未選択時のデフォルト挙動：基本は「表示対象のみ」を表示したい場合
       matchVisibility = !isHidden; 
     }
 
-    return matchKey && matchGroup && matchCategory && matchPrefecture && matchStatus && matchVisibility;
+    return matchKey && matchGroup && matchCategory && matchPrefecture && matchStatus && matchColor && matchVisibility;
   });
 
   // ソート処理
@@ -288,6 +340,27 @@ window.filterMembers = function() {
         const rubyB = b.ruby || b.name || '';
         return rubyA.localeCompare(rubyB, 'ja');
       }
+      case 'color_asc': {
+        // 🎨 カラー順の優先順位マップ（数値が小さいほど上位に表示）
+        const colorOrder = {
+          red: 1,
+          pink: 2,
+          orange: 3,
+          yellow: 4,
+          green: 5,
+          blue: 6,
+          purple: 7,
+          white: 8,
+          black: 9
+        };
+        const orderA = colorOrder[a.color_category] || 99; // 未設定は最後尾
+        const orderB = colorOrder[b.color_category] || 99;
+        if (orderA !== orderB) return orderA - orderB;
+        // カラーが同じ場合は名前順でサブソート
+        const rubyA = a.ruby || a.name || '';
+        const rubyB = b.ruby || b.name || '';
+        return rubyA.localeCompare(rubyB, 'ja');
+      }
       case 'created_desc':
         return new Date(b.created_at || 0) - new Date(a.created_at || 0);
       case 'created_asc':
@@ -299,6 +372,40 @@ window.filterMembers = function() {
 
   renderMembers(filtered);
 };
+
+// 1. 個別の丸カラーボタンの有効/無効切り替え
+function toggleColorFilterBtn(btn) {
+  btn.classList.toggle('opacity-40');
+  btn.classList.toggle('grayscale');
+  btn.classList.toggle('border-dashed');
+  // 状態が変わったらフィルタリングを実行
+  if (typeof filterMembers === 'function') filterMembers();
+}
+
+// 2. 全選択 / 全解除
+function toggleAllColorFilters(enable) {
+  document.querySelectorAll('.color-filter-pill').forEach(btn => {
+    if (enable) {
+      btn.classList.remove('opacity-40', 'grayscale', 'border-dashed');
+    } else {
+      btn.classList.add('opacity-40', 'grayscale', 'border-dashed');
+    }
+  });
+  if (typeof filterMembers === 'function') filterMembers();
+}
+
+// 3. カード着色ON/OFFトグル（絵文字ボタン用）
+
+function toggleCardColorState() {
+  isCardColorEnabled = !isCardColorEnabled;
+  console.log("カラーパレットスイッチ：",isCardColorEnabled)
+  const statusText = document.getElementById('color-status-text');
+  if (statusText) {
+    statusText.innerText = isCardColorEnabled ? 'ON' : 'OFF';
+    statusText.className = isCardColorEnabled ? 'text-[10px] font-bold text-pink-400' : 'text-[10px] font-bold text-slate-500';
+  }
+  if (typeof filterMembers === 'function') filterMembers();
+}
 
 // ページ最上部（またはタブ上部）へスムーズスクロール
 function scrollToGroupTop() {
@@ -918,6 +1025,11 @@ window.openMemberModal = function(memberId = null) {
   const form = document.getElementById('member-form');
   if (form) form.reset();
 
+  // 💡 リセット時にカラー選択ボタンのハイライトも初期化（「なし」状態にする）
+  if (typeof selectColorCategory === 'function') {
+    selectColorCategory('');
+  }
+
   document.getElementById('member-id').value = memberId || '';
 
   // プレビュー・バナー要素の初期化
@@ -937,16 +1049,56 @@ window.openMemberModal = function(memberId = null) {
       document.getElementById('member-group').value = m.group_id || '';
       document.getElementById('member-category').value = m.category || '';
       document.getElementById('member-prefecture').value = m.prefecture || '';
+      document.getElementById('member-x-url').value = m.x_url || '';
       document.getElementById('member-tags').value = (m.tags || []).join(', ');
 
       const radios = document.getElementsByName('member-status');
       radios.forEach(r => r.checked = (r.value === (m.status || 'active')));
 
+      // ==========================================
+      // 🌟 新規追加項目のバインド（ここを追加！）
+      // ==========================================
+      
+      // 1. 担当カラー系統 & 自由記入名
+      if (typeof selectColorCategory === 'function') {
+        selectColorCategory(m.color_category || '');
+      }
+      document.getElementById('member-color-name').value = m.color_name || '';
+
+      // 2. 誕生日（'MM-DD' 形式を月と日に分割してセレクトボックスにセット）
+      if (m.birthday && m.birthday.includes('-')) {
+        const [birthMonth, birthDay] = m.birthday.split('-');
+        document.getElementById('member-birth-month').value = birthMonth || '';
+        document.getElementById('member-birth-day').value = birthDay || '';
+      } else {
+        document.getElementById('member-birth-month').value = '';
+        document.getElementById('member-birth-day').value = '';
+      }
+
+      // 3. デビュー日
+      document.getElementById('member-debut-date').value = m.debut_date || '';
+
+      // 4. 自分専用設定（user_member_settings または m から取得）
+      const userSetting = m.user_member_settings;
+      
+      // 非表示フラグ
+      const isHiddenCheckbox = document.getElementById('member-is-hidden');
+      if (isHiddenCheckbox) {
+        isHiddenCheckbox.checked = userSetting ? !!userSetting.is_hidden : (!!m.is_hidden);
+      }
+
+      // 出会った日
+      document.getElementById('member-met-date').value = userSetting?.met_date || m.met_date || '';
+
+      // 自分用メモ
+      document.getElementById('member-my-memo').value = userSetting?.my_memo || m.my_memo || '';
+
+      // ==========================================
+
       // 1. メンバーが持つ画像一覧を取得（ID・URLが揃った配列）
       currentModalImages = m.member_images ? JSON.parse(JSON.stringify(m.member_images)) : [];
 
       // 2. お気に入り画像IDの決定
-      const userSetting = m.user_member_settings;
       currentFavoriteImageId = userSetting?.favorite_image_id || currentModalImages.find(i => i.is_default)?.id || currentModalImages[0]?.id || null;
 
       // 🌟 3. お気に入り画像のインデックス（順番）を初期表示に設定
@@ -981,6 +1133,30 @@ window.closeMemberModal = function() {
     modal.classList.remove('flex');
   }
 };
+
+// スムーズスクロール用
+function scrollToMemberSection(sectionId) {
+  const target = document.getElementById(sectionId);
+  if (target) {
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+// 担当カラーカテゴリ選択用
+function selectColorCategory(colorKey) {
+  document.getElementById('member-color-category').value = colorKey;
+  
+  document.querySelectorAll('#color-category-selector .color-cat-btn').forEach(btn => {
+    const isSelected = btn.getAttribute('data-color') === colorKey;
+    if (isSelected) {
+      btn.classList.add('border-2', 'border-pink-500', 'bg-slate-800');
+      btn.classList.remove('border-slate-800', 'bg-slate-950');
+    } else {
+      btn.classList.remove('border-2', 'border-pink-500', 'bg-slate-800');
+      btn.classList.add('border-slate-800', 'bg-slate-950');
+    }
+  });
+}
 
 // バナーの表示内容（画像・ドット・❤の状態）を更新する関数
 function updateMemberImageBanner() {
@@ -1119,6 +1295,7 @@ window.saveMember = async function(e) {
   const group_id = document.getElementById('member-group').value || null;
   const category = document.getElementById('member-category').value || null;
   const prefecture = document.getElementById('member-prefecture').value || null;
+  const x_url = document.getElementById('member-x-url').value.trim() || null;
   const rawTags = document.getElementById('member-tags').value;
   const tags = rawTags ? rawTags.split(',').map(t => t.trim()).filter(t => t) : [];
 
@@ -1126,7 +1303,32 @@ window.saveMember = async function(e) {
   const radios = document.getElementsByName('member-status');
   radios.forEach(r => { if (r.checked) status = r.value; });
 
-  const payload = { name, ruby, group_id, category, prefecture, status, tags };
+  // 💡 新規追加項目（マスター側: members テーブルに保存するもの）の取得
+  const color_category = document.getElementById('member-color-category').value || null;
+  const color_name = document.getElementById('member-color-name').value.trim() || null;
+  
+  // 誕生日（月・日を結合して 'MM-DD' 形式に整形、未選択なら null）
+  const birthMonth = document.getElementById('member-birth-month').value;
+  const birthDay = document.getElementById('member-birth-day').value;
+  const birthday = (birthMonth && birthDay) ? `${birthMonth}-${birthDay}` : null;
+
+  const debut_date = document.getElementById('member-debut-date').value || null;
+
+  // members テーブルに送るペイロード
+  const payload = { 
+    name, 
+    ruby, 
+    group_id, 
+    category, 
+    prefecture, 
+    status, 
+    tags,
+    color_category,
+    color_name,
+    birthday,
+    debut_date,
+    x_url
+  };
 
   try {
     let memberData;
@@ -1143,7 +1345,6 @@ window.saveMember = async function(e) {
 
     if (memberData) {
       // 2. マルチ画像（member_images）の同期処理
-      // データベース上に既存の画像一覧を取得
       const { data: existingDbImages, error: fetchErr } = await supabase
         .from('member_images')
         .select('*')
@@ -1220,13 +1421,21 @@ window.saveMember = async function(e) {
         }
       }
 
-      // 3. ユーザーごとの設定（user_member_settings）にお気に入り画像IDを保存・更新
+      // 3. ユーザーごとの設定（user_member_settings）の保存・更新
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        // 💡 自分専用設定（非表示フラグ、出会った日、自分用メモ）の値を取得
+        const is_hidden = document.getElementById('member-is-hidden').checked;
+        const met_date = document.getElementById('member-met-date').value || null;
+        const my_memo = document.getElementById('member-my-memo').value.trim() || null;
+
         const settingPayload = {
           user_id: user.id,
           member_id: memberData.id,
-          favorite_image_id: resolvedFavoriteId || null
+          favorite_image_id: resolvedFavoriteId || null,
+          is_hidden: is_hidden,
+          met_date: met_date,
+          my_memo: my_memo
         };
 
         const { error: settingError } = await supabase
