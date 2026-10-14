@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>アイドルカードゲーム・OSHI-COLLE</title>
+<style>
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 30px;
+    min-height: 100vh;
+    background: #1a1c29;
+    margin: 0;
+    font-family: 'M PLUS Rounded 1c', 'Helvetica Neue', Arial, sans-serif;
+    flex-wrap: wrap;
+    padding: 20px;
+  }
+
+  /* ==========================================
+     属性ごとのカラー定義（CSS変数）
+     ========================================== */
+  .card-container {
+    --theme-main: #ff75a0;
+    --theme-sub: #ffb6c1;
+    --theme-bg-start: #fff0f5;
+    --theme-bg-end: #ffd1dc;
+    --theme-border: #ffffff;
+    --theme-accent: #ff4081;
+    --theme-shine: rgba(255, 182, 193, 0.5);
+
+    width: 260px;
+    height: 380px;
+    perspective: 1200px;
+    cursor: pointer;
+  }
+
+  .card-container[data-attribute="cool"] {
+    --theme-main: #4a90e2;
+    --theme-sub: #a1c4fd;
+    --theme-bg-start: #f0f8ff;
+    --theme-bg-end: #c2e9fb;
+    --theme-accent: #1976d2;
+    --theme-shine: rgba(161, 196, 253, 0.5);
+  }
+
+  .card-container[data-attribute="passion"] {
+    --theme-main: #ffa726;
+    --theme-sub: #ffe082;
+    --theme-bg-start: #fffde7;
+    --theme-bg-end: #ffe082;
+    --theme-accent: #f57c00;
+    --theme-shine: rgba(255, 224, 130, 0.5);
+  }
+
+  /* ==========================================
+     カード構造＆フリップアニメーション
+     ========================================== */
+  .card {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .card-container:hover .card {
+    transform: rotateY(180deg);
+  }
+
+  .card-face {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3), 0 0 15px var(--theme-shine);
+    box-sizing: border-box;
+  }
+
+  /* ==========================================
+     裏面デザイン（画像差し込み対応）
+     ========================================== */
+  .card-back {
+    background: #fff;
+  }
+  .card-back img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  /* ==========================================
+     表面デザイン（属性対応ポップ装飾）
+     ========================================== */
+  .card-front {
+    background: linear-gradient(160deg, var(--theme-bg-start) 0%, var(--theme-bg-end) 100%);
+    border: 5px solid var(--theme-border);
+    transform: rotateY(180deg);
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+  }
+
+  /* カードヘッダー */
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 4px 10px;
+    margin-bottom: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    border: 2px solid var(--theme-sub);
+    z-index: 2;
+  }
+  .card-name {
+    font-size: 14px;
+    font-weight: 800;
+    color: #444;
+  }
+  .card-rarity {
+    font-size: 13px;
+    font-weight: 900;
+    color: var(--theme-accent);
+    letter-spacing: 1px;
+  }
+
+  /* イラスト枠 */
+  .card-illustration-frame {
+    flex-grow: 1;
+    border: 3px solid #ffffff;
+    border-radius: 14px;
+    overflow: hidden;
+    position: relative;
+    background: #fff;
+    box-shadow: inset 0 0 8px rgba(0,0,0,0.1);
+  }
+  .card-illustration-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  /* シャイン光沢（斜線） */
+  .card-front::after {
+    content: "";
+    position: absolute;
+    inset: -60%;
+    background: linear-gradient(
+      125deg,
+      transparent 35%,
+      rgba(255, 255, 255, 0.7) 48%,
+      var(--theme-shine) 52%,
+      transparent 65%
+    );
+    pointer-events: none;
+    mix-blend-mode: color-dodge;
+    transform: rotate(20deg);
+  }
+
+  /* ステータスエリア */
+  .card-footer {
+    margin-top: 8px;
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 6px 8px;
+    border: 2px solid var(--theme-sub);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    z-index: 2;
+  }
+  .card-stats {
+    display: flex;
+    justify-content: space-around;
+    font-weight: 800;
+    font-size: 12px;
+    color: var(--theme-accent);
+  }
+  .card-stats span {
+    background: var(--theme-bg-start);
+    padding: 2px 8px;
+    border-radius: 8px;
+  }
+  .card-flavor {
+    font-size: 10px;
+    color: #666;
+    text-align: center;
+    margin-top: 4px;
+    font-weight: 500;
+  }
+</style>
+</head>
+<body>
+
+  <!-- 【Cute属性カード】 -->
+  <div class="card-container" data-attribute="cute">
+    <div class="card">
+      <!-- 裏面（画像ファイルを指定：例 card-back.jpg） -->
+      <div class="card-face card-back">
+        <img src="card-back.jpg" alt="OSHI-COLLE Card Back">
+      </div>
+      <!-- 表面 -->
+      <div class="card-face card-front">
+        <div class="card-header">
+          <span class="card-name">桜夜 やに。</span>
+          <span class="card-rarity">UR</span>
+        </div>
+        <div class="card-illustration-frame">
+          <img src="https://emdfbkbebnzlrwkitwzf.supabase.co/storage/v1/object/public/member-images/2_1790934490996.png?auto=format&fit=crop&w=600&q=80" alt="Cute Idol">
+        </div>
+        <div class="card-footer">
+          <div class="card-stats">
+            <span>VO: 4200</span>
+            <span>DA: 3100</span>
+            <span>VI: 5500</span>
+          </div>
+          <div class="card-flavor">「とびきりの笑顔、届けてあげるねっ！」</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 【Cool属性カード】 -->
+  <div class="card-container" data-attribute="cool">
+    <div class="card">
+      <div class="card-face card-back">
+        <img src="card-back.jpg" alt="OSHI-COLLE Card Back">
+      </div>
+      <div class="card-face card-front">
+        <div class="card-header">
+          <span class="card-name">一ノ瀬 まあや</span>
+          <span class="card-rarity">UR</span>
+        </div>
+        <div class="card-illustration-frame">
+          <img src="https://emdfbkbebnzlrwkitwzf.supabase.co/storage/v1/object/public/member-images/8_1790936697656.png?auto=format&fit=crop&w=600&q=80" alt="Cool Idol">
+        </div>
+        <div class="card-footer">
+          <div class="card-stats">
+            <span>VO: 5800</span>
+            <span>DA: 4100</span>
+            <span>VI: 3200</span>
+          </div>
+          <div class="card-flavor">「最高のパフォーマンスを見せるわ。」</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 【Passion属性カード】 -->
+  <div class="card-container" data-attribute="passion">
+    <div class="card">
+      <div class="card-face card-back">
+        <img src="card-back.jpg" alt="OSHI-COLLE Card Back">
+      </div>
+      <div class="card-face card-front">
+        <div class="card-header">
+          <span class="card-name">みくる</span>
+          <span class="card-rarity">UR</span>
+        </div>
+        <div class="card-illustration-frame">
+          <img src="https://emdfbkbebnzlrwkitwzf.supabase.co/storage/v1/object/public/member-images/members/13_1791007927351?auto=format&fit=crop&w=600&q=80" alt="Passion Idol">
+        </div>
+        <div class="card-footer">
+          <div class="card-stats">
+            <span>VO: 3500</span>
+            <span>DA: 6000</span>
+            <span>VI: 3800</span>
+          </div>
+          <div class="card-flavor">「よーし！会場全体で盛り上がっていこー！」</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
