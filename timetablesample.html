@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>対バンライブ・タイムテーブル結果発表</title>
+<title>対バンライブ・タイムテーブル結果発表（テーマ切替機能付き）</title>
 <style>
   /* ==========================================
      テーマ設定（CSS変数）
@@ -16,6 +16,7 @@
     --accent-color: #ff4081;
     --header-bg: linear-gradient(135deg, #ff75a0, #ffa726);
     --card-border: rgba(255, 255, 255, 0.1);
+    --btn-active: #ff4081;
     --font-family: 'M PLUS Rounded 1c', sans-serif;
   }
 
@@ -28,6 +29,7 @@
     --accent-color: #00e5ff;
     --header-bg: linear-gradient(135deg, #2a0845, #6441a5);
     --card-border: rgba(0, 229, 255, 0.2);
+    --btn-active: #00e5ff;
     --font-family: 'Helvetica Neue', sans-serif;
   }
 
@@ -40,6 +42,7 @@
     --accent-color: #ff69b4;
     --header-bg: linear-gradient(135deg, #ffb6c1, #ffc0cb);
     --card-border: #ffe4e1;
+    --btn-active: #ff69b4;
     --font-family: 'M PLUS Rounded 1c', sans-serif;
   }
 
@@ -50,42 +53,85 @@
     margin: 0;
     padding: 20px;
     display: flex;
-    justify-content: center;
-    transition: all 0.3s ease;
+    flex-direction: column;
+    align-items: center;
+    transition: background-color 0.4s ease, color 0.4s ease;
   }
 
-  /* タイムテーブルの全体容器 */
+  /* ==========================================
+     テーマ切り替えボタンコントロールエリア
+     ========================================== */
+  .theme-controller {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 24px;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 8px 12px;
+    border-radius: 30px;
+    backdrop-filter: blur(5px);
+  }
+
+  .theme-btn {
+    background: transparent;
+    border: 2px solid transparent;
+    color: var(--text-main);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    opacity: 0.7;
+  }
+
+  .theme-btn:hover {
+    opacity: 1;
+  }
+
+  /* アクティブ（現在選択中）のボタンのスタイル */
+  .theme-btn.active {
+    opacity: 1;
+    background: var(--btn-active);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  /* ==========================================
+     タイムテーブル部分
+     ========================================== */
   .timetable-container {
     width: 100%;
-    max-width: 500px;
+    max-width: 480px;
     background: var(--panel-bg);
-    border-radius: 20px;
+    border-radius: 24px;
     overflow: hidden;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
     border: 1px solid var(--card-border);
+    transition: background-color 0.4s ease, border-color 0.4s ease;
   }
 
-  /* イベントヘッダー */
   .event-header {
     background: var(--header-bg);
     padding: 24px 20px;
     text-align: center;
-    color: #fff;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    color: #ffffff;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    transition: background 0.4s ease;
   }
+
   .event-title {
     font-size: 22px;
     font-weight: 900;
     margin: 0;
     letter-spacing: 1px;
   }
+
   .event-subtitle {
     font-size: 12px;
     margin-top: 6px;
     opacity: 0.9;
   }
 
-  /* タイムラインリスト */
   .timetable-list {
     padding: 20px;
     display: flex;
@@ -94,7 +140,6 @@
     position: relative;
   }
 
-  /* 左側のタイムライン縦線 */
   .timetable-list::before {
     content: "";
     position: absolute;
@@ -103,9 +148,9 @@
     bottom: 30px;
     width: 3px;
     background: var(--card-border);
+    transition: background 0.4s ease;
   }
 
-  /* 各出演枠（カード） */
   .timetable-item {
     display: flex;
     align-items: center;
@@ -114,7 +159,6 @@
     z-index: 1;
   }
 
-  /* 出演時間バッジ */
   .item-time {
     width: 65px;
     font-size: 13px;
@@ -124,47 +168,47 @@
     flex-shrink: 0;
   }
 
-  /* 出演グループカード本体 */
   .item-card {
     flex-grow: 1;
-    background: rgba(255, 255, 255, 0.05);
     border-left: 5px solid var(--group-color, var(--accent-color));
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 10px 12px;
     display: flex;
     align-items: center;
     gap: 12px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
     background-color: var(--panel-bg);
     border-top: 1px solid var(--card-border);
     border-right: 1px solid var(--card-border);
     border-bottom: 1px solid var(--card-border);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    transition: background-color 0.4s ease, border-color 0.4s ease;
   }
 
-  /* グループ画像 */
   .group-img {
-    width: 50px;
-    height: 50px;
-    border-radius: 10px;
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
     object-fit: cover;
     flex-shrink: 0;
   }
 
-  /* グループ詳細 */
   .group-info {
     display: flex;
     flex-direction: column;
     gap: 2px;
   }
+
   .group-name {
     font-size: 15px;
     font-weight: bold;
     color: var(--text-main);
   }
+
   .group-comment {
     font-size: 11px;
     color: var(--text-sub);
   }
+
   .group-tag {
     display: inline-block;
     font-size: 9px;
@@ -178,20 +222,23 @@
   }
 </style>
 </head>
-<!-- data-theme を "pop", "livehouse", "idol" に変更することで雰囲気が一変します -->
 <body data-theme="pop">
 
+  <!-- ★切り替えボタンエリア -->
+  <div class="theme-controller">
+    <button class="theme-btn active" onclick="changeTheme('pop', this)">🎉 ポップフェス</button>
+    <button class="theme-btn" onclick="changeTheme('livehouse', this)">🎸 ライブハウス</button>
+    <button class="theme-btn" onclick="changeTheme('idol', this)">🌸 王道アイドル</button>
+  </div>
+
+  <!-- タイムテーブル本体 -->
   <div class="timetable-container">
-    <!-- イベントヘッダー（プレイヤーが名付けたイベント名など） -->
     <div class="event-header">
       <h1 class="event-title">OSHI-COLLE LIVE FES 2026</h1>
       <div class="event-subtitle">〜最強の推し対バンステージ！〜</div>
     </div>
 
-    <!-- タイムテーブル本体 -->
     <div class="timetable-list">
-
-      <!-- 出演枠1 -->
       <div class="timetable-item">
         <div class="item-time">12:00〜</div>
         <div class="item-card" style="--group-color: #ff75a0;">
@@ -204,7 +251,6 @@
         </div>
       </div>
 
-      <!-- 出演枠2 -->
       <div class="timetable-item">
         <div class="item-time">12:45〜</div>
         <div class="item-card" style="--group-color: #4a90e2;">
@@ -217,7 +263,6 @@
         </div>
       </div>
 
-      <!-- 出演枠3 -->
       <div class="timetable-item">
         <div class="item-time">13:30〜</div>
         <div class="item-card" style="--group-color: #ffa726;">
@@ -229,9 +274,21 @@
           </div>
         </div>
       </div>
-
     </div>
   </div>
+
+  <!-- ★テーマ切り替え用のJavaScript -->
+  <script>
+    function changeTheme(themeName, btnElement) {
+      // 1. bodyの data-theme 属性を変更する
+      document.body.setAttribute('data-theme', themeName);
+
+      // 2. ボタンのアクティブ状態（見た目）を切り替える
+      const buttons = document.querySelectorAll('.theme-btn');
+      buttons.forEach(btn => btn.classList.remove('active'));
+      btnElement.classList.add('active');
+    }
+  </script>
 
 </body>
 </html>
