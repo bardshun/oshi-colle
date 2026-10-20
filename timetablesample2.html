@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>イベント告知・結果発表フライヤー風</title>
+<style>
+  body {
+    background-color: #0f1016;
+    color: #fff;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+  }
+
+  /* フライヤー全体のコンテナ（ポスターっぽく見せる） */
+  .flyer-container {
+    width: 100%;
+    max-width: 480px;
+    background: linear-gradient(135deg, #2b1055, #7597de);
+    border-radius: 24px;
+    padding: 24px;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+    border: 4px solid #ffdf00;
+    box-sizing: border-box;
+  }
+
+  /* イベントロゴエリア */
+  .flyer-header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .flyer-title {
+    font-size: 24px;
+    font-weight: 900;
+    color: #ffdf00;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+    margin: 0 0 4px 0;
+    letter-spacing: 1px;
+  }
+  .flyer-subtitle {
+    font-size: 12px;
+    background: rgba(0,0,0,0.3);
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    color: #ffceed;
+  }
+
+  /* ==========================================
+     ③ 主催グループ（メイン）の大きな表示枠
+     ========================================== */
+  .main-host-section {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 12px;
+    margin-bottom: 20px;
+    border: 2px solid rgba(255,255,255,0.3);
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    backdrop-filter: blur(5px);
+  }
+  .host-img {
+    width: 90px;
+    height: 90px;
+    border-radius: 12px;
+    object-fit: cover;
+    border: 2px solid #ffdf00;
+    flex-shrink: 0;
+  }
+  .host-info {
+    display: flex;
+    direction: ltr;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .host-badge {
+    background: #ffdf00;
+    color: #000;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 4px;
+    width: fit-content;
+  }
+  .host-name {
+    font-size: 16px;
+    font-weight: bold;
+  }
+  .host-time {
+    font-size: 13px;
+    color: #ffceed;
+    font-weight: bold;
+  }
+
+  /* ==========================================
+     ② ゲストグループ（写真＋時間が下に並ぶグリッド）
+     ========================================== */
+  .guest-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr); /* 2列で並べる */
+    gap: 12px;
+  }
+
+  .guest-card {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    flex-direction: column;
+  }
+  .guest-img-wrapper {
+    position: relative;
+    width: 100%;
+    height: 120px;
+  }
+  .guest-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  /* 写真の上に被せる時間バッジ */
+  .guest-time-badge {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    background: rgba(0, 0, 0, 0.8);
+    color: #ffdf00;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .guest-details {
+    padding: 10px;
+    text-align: center;
+  }
+  .guest-name {
+    font-size: 13px;
+    font-weight: bold;
+    margin-bottom: 2px;
+  }
+  .guest-tag {
+    font-size: 10px;
+    color: #a0a5c0;
+  }
+</style>
+</head>
+<body>
+
+  <div class="flyer-container">
+    
+    <!-- イベントロゴ・タイトル -->
+    <div class="flyer-header">
+      <h1 class="flyer-title">⭐ DREAM IDOL FES ⭐</h1>
+      <span class="flyer-subtitle">〜 プレイヤー厳選の最強対バンライブ 〜</span>
+    </div>
+
+    <!-- ③ 主催（メイン）グループの大きく表示する枠 -->
+    <div class="main-host-section">
+      <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80" class="host-img" alt="主催グループ">
+      <div class="host-info">
+        <span class="host-badge">HOST / SPECIAL STAGE</span>
+        <span class="host-name">チェリー☆ブロッサム</span>
+        <span class="host-time">⏰ 19:00〜 (トリ)</span>
+      </div>
+    </div>
+
+    <!-- ② ゲストグループが写真メインで並ぶエリア（グリッド） -->
+    <div class="guest-grid">
+      
+      <!-- ゲスト1 -->
+      <div class="guest-card">
+        <div class="guest-img-wrapper">
+          <img src="https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=300&q=80" class="guest-img" alt="ゲスト1">
+          <span class="guest-time-badge">17:00〜</span>
+        </div>
+        <div class="guest-details">
+          <div class="guest-name">Night Sky</div>
+          <div class="guest-tag">Cool ｜ 1st Act</div>
+        </div>
+      </div>
+
+      <!-- ゲスト2 -->
+      <div class="guest-card">
+        <div class="guest-img-wrapper">
+          <img src="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80" class="guest-img" alt="ゲスト2">
+          <span class="guest-time-badge">18:00〜</span>
+        </div>
+        <div class="guest-details">
+          <div class="guest-name">サンシャイン</div>
+          <div class="guest-tag">Passion ｜ 2nd Act</div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</body>
+</html>
